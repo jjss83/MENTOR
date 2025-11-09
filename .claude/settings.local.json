@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo:*)",
+      "Bash(test:*)",
+      "Bash(source ~/.bash_profile)",
+      "Bash(. \"/c/Users/juanj/AppData/Local/Programs/Microsoft VS Code/resources/app/out/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
