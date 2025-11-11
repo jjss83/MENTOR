@@ -248,4 +248,5 @@ mono_crash.*
 
 # Windows shortcuts
 *.lnk
-MentorMlApi/bin/Debug/net9.0/MentorMlApi.exe
+MentorMlApi/bin/*
+MentorMlApi/obj/*
