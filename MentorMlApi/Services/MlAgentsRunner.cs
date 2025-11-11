@@ -5,11 +5,12 @@ using Microsoft.Extensions.Options;
 
 namespace MentorMlApi.Services;
 
-public sealed class MlAgentsRunner(IOptions<MlAgentsSettings> options, ILogger<MlAgentsRunner> logger)
+public sealed class MlAgentsRunner(IOptions<MlAgentsSettings> options, ILogger<MlAgentsRunner> logger, IMlAgentsProcessTracker processTracker)
     : IMlAgentsRunner
 {
     private readonly MlAgentsSettings _settings = options.Value;
     private readonly ILogger<MlAgentsRunner> _logger = logger;
+    private readonly IMlAgentsProcessTracker _processTracker = processTracker;
 
     public async Task<MlAgentsRunResponse> RunTrainingAsync(MlAgentsRunRequest request, CancellationToken cancellationToken)
     {
@@ -67,9 +68,12 @@ public sealed class MlAgentsRunner(IOptions<MlAgentsSettings> options, ILogger<M
 
         _logger.LogInformation("Starting ML-Agents run {RunId} with command: {Command}", runId, command);
 
+        IDisposable? trackingScope = null;
+
         try
         {
             process.Start();
+            trackingScope = _processTracker.Track(process, runId, command, _settings.WorkingDirectory, startedAt);
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
@@ -79,6 +83,10 @@ public sealed class MlAgentsRunner(IOptions<MlAgentsSettings> options, ILogger<M
         {
             TryKill(process);
             throw;
+        }
+        finally
+        {
+            trackingScope?.Dispose();
         }
 
         var completedAt = DateTimeOffset.UtcNow;

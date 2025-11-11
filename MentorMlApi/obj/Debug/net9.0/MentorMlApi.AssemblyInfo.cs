@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MentorMlApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3edc97a8665b10d67ebfba3d4ff090c9ccd98a85")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a1ada9a2bdd77005d1b0fe9c848b026bd0e851e2")]
 [assembly: System.Reflection.AssemblyProductAttribute("MentorMlApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MentorMlApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

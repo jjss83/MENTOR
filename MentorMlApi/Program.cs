@@ -17,6 +17,7 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 builder.Services.Configure<MlAgentsSettings>(builder.Configuration.GetSection("MlAgents"));
+builder.Services.AddSingleton<IMlAgentsProcessTracker, MlAgentsProcessTracker>();
 builder.Services.AddSingleton<IMlAgentsRunner, MlAgentsRunner>();
 
 var app = builder.Build();
@@ -41,6 +42,12 @@ app.MapPost("/mlagents/run", async Task<IResult> (MlAgentsRunRequest? request, I
     })
     .WithName("RunMlAgentsTraining")
     .WithDescription("Runs the configured ML-Agents training command inside the configured Conda environment.")
+    .WithOpenApi();
+
+app.MapGet("/mlagents/processes", (IMlAgentsProcessTracker tracker)
+        => Results.Ok(tracker.GetRunningProcesses()))
+    .WithName("GetRunningMlAgentsProcesses")
+    .WithDescription("Returns the ML-Agents training processes currently running via this service.")
     .WithOpenApi();
 
 app.Run();
