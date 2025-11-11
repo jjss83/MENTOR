@@ -248,5 +248,16 @@ mono_crash.*
 
 # Windows shortcuts
 *.lnk
-MentorMlApi/bin/*
-MentorMlApi/obj/*
+
+MentorMlApi/[Dd]ebug/
+MentorMlApi/[Dd]ebugPublic/
+MentorMlApi/[Rr]elease/
+MentorMlApi/[Rr]eleases/
+MentorMlApi/x64/
+MentorMlApi/x86/
+MentorMlApi/[Ww][Ii][Nn]32/
+MentorMlApi/[Aa][Rr][Mm]/
+MentorMlApi/[Aa][Rr][Mm]64/
+MentorMlApi/bld/
+MentorMlApi/[Ll]og/
+MentorMlApi/[Ll]ogs/
