@@ -1,6 +1,8 @@
 # .NET
 **/bin/
 **/obj/
+MentorMlApi/bin/
+MentorMlApi/obj/
 *.user
 *.suo
 *.userosscache
@@ -246,3 +248,4 @@ mono_crash.*
 
 # Windows shortcuts
 *.lnk
+MentorMlApi/bin/Debug/net9.0/MentorMlApi.exe
