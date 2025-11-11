@@ -15,7 +15,7 @@ Minimal ASP.NET Core Web API that shells out to the local Unity ML-Agents instal
 | Setting | Notes |
 | --- | --- |
 | `WorkingDirectory` | Path to the `ml-agents` repo. |
-| `UseCondaRun` | When `true`, prefixes commands with `conda run --no-capture-output -n <env>`. Defaults to `false` so the raw `mlagents-learn` CLI is used. |
+| `UseCondaRun` | When `true`, prefixes commands with `conda run --no-capture-output -n <env>`. Defaults to `true` so the service automatically runs inside the configured Conda env. |
 | `CondaExecutable` | Only used when `UseCondaRun` is `true`; point to `conda.exe` if needed. |
 | `CondaEnvironmentName` | Name of the Conda env that holds ML-Agents (required when `UseCondaRun` is `true`). |
 | `DefaultConfigPath` | Trainer YAML relative to `WorkingDirectory`. |
@@ -98,8 +98,11 @@ When no processes are active the endpoint returns an empty array.
 
 - Use whichever request fields mirror the CLI flags you need; the service now covers the documented switches without relying on raw `additionalArguments`.
 - Any file path you supply (config, environment, curriculum) is resolved relative to the configured ML-Agents working directory when it is not absolute.
-- Enable `UseCondaRun` if you want the service to wrap execution via `conda run -n <env>`; leave it `false` to invoke `mlagents-learn` directly, matching the docs' examples.
+- `UseCondaRun` is enabled by default so the service wraps execution via `conda run -n <env>`. Disable it only if you need to call `mlagents-learn` directly (for example, when Conda isn't available).
 - If `conda` is not on PATH, set `CondaExecutable` to the absolute path (e.g. `C:\tools\miniconda3\Scripts\conda.exe`).
 - The API is Windows-focused because it shells through `cmd.exe`; adjust the `ProcessStartInfo` logic if you need cross-platform support later.
+
+
+
 
 
