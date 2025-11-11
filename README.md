@@ -73,3 +73,7 @@ When no processes are active the endpoint returns an empty array.
 - When running different Unity samples, override `configPath`, `environmentPath`, or supply extra CLI flags via `additionalArguments`.
 - If `conda` is not on PATH, set `CondaExecutable` to the absolute path (e.g. `C:\tools\miniconda3\Scripts\conda.exe`).
 - The API is Windows-focused because it shells through `cmd.exe`; adjust the `ProcessStartInfo` logic if you need cross-platform support later.
+
+## MCP Server
+
+Need MCP integration? Use `mcp\mentor-ml-api`, which exposes the `/mlagents/run` and `/mlagents/processes` endpoints as MCP tools. Install dependencies with `npm install`, run `npm run build`, then point your MCP client at `node mcp/mentor-ml-api/dist/index.js`. Configure the target Mentor ML API instance via the `MENTOR_ML_API_BASE_URL` (and optional auth) environment variables described in that folder's README.
