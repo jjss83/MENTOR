@@ -1,0 +1,16 @@
+{
+	"servers": {
+		"mentor-ml-api": {
+			"type": "stdio",
+			"command": "node",
+			"args": [
+				"mcp/mentor-ml-api/dist/index.js"
+			],
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"MENTOR_ML_API_BASE_URL": "http://localhost:5113"
+			}
+		},
+	},
+	"inputs": []
+}

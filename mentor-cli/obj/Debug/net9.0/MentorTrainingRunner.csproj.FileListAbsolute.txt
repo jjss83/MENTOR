@@ -1,0 +1,15 @@
+X:\workspace\MENTOR\mentor-cli\obj\Debug\net9.0\MentorTrainingRunner.GeneratedMSBuildEditorConfig.editorconfig
+X:\workspace\MENTOR\mentor-cli\obj\Debug\net9.0\MentorTrainingRunner.AssemblyInfoInputs.cache
+X:\workspace\MENTOR\mentor-cli\obj\Debug\net9.0\MentorTrainingRunner.AssemblyInfo.cs
+X:\workspace\MENTOR\mentor-cli\obj\Debug\net9.0\MentorTrainingRunner.csproj.CoreCompileInputs.cache
+X:\workspace\MENTOR\mentor-cli\obj\Debug\net9.0\MentorTrainingRunner.sourcelink.json
+X:\workspace\MENTOR\mentor-cli\bin\Debug\net9.0\MentorTrainingRunner.exe
+X:\workspace\MENTOR\mentor-cli\bin\Debug\net9.0\MentorTrainingRunner.deps.json
+X:\workspace\MENTOR\mentor-cli\bin\Debug\net9.0\MentorTrainingRunner.runtimeconfig.json
+X:\workspace\MENTOR\mentor-cli\bin\Debug\net9.0\MentorTrainingRunner.dll
+X:\workspace\MENTOR\mentor-cli\bin\Debug\net9.0\MentorTrainingRunner.pdb
+X:\workspace\MENTOR\mentor-cli\obj\Debug\net9.0\MentorTrainingRunner.dll
+X:\workspace\MENTOR\mentor-cli\obj\Debug\net9.0\refint\MentorTrainingRunner.dll
+X:\workspace\MENTOR\mentor-cli\obj\Debug\net9.0\MentorTrainingRunner.pdb
+X:\workspace\MENTOR\mentor-cli\obj\Debug\net9.0\MentorTrainingRunner.genruntimeconfig.cache
+X:\workspace\MENTOR\mentor-cli\obj\Debug\net9.0\ref\MentorTrainingRunner.dll
