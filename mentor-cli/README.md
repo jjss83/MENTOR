@@ -49,4 +49,4 @@ dotnet run -- \
   --no-graphics
 ```
 
-If you have already activated the ML-Agents environment (e.g., via `conda activate mlagents`), add `--skip-conda` to avoid launching a nested Conda session.
+The runner now lets `mlagents-learn` write straight to whatever stdout/stderr Mentors's console is using, so you’ll see the native logs (including colorized progress output) both interactively and when piping to other tools. If you have already activated the ML-Agents environment (e.g., via `conda activate mlagents`), add `--skip-conda` to avoid launching a nested Conda session.

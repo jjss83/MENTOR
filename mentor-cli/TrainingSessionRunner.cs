@@ -23,22 +23,6 @@ internal sealed class TrainingSessionRunner
         Console.WriteLine(FormatCommand(process.StartInfo));
         Console.WriteLine();
 
-        process.OutputDataReceived += (_, data) =>
-        {
-            if (data.Data is not null)
-            {
-                Console.WriteLine(data.Data);
-            }
-        };
-
-        process.ErrorDataReceived += (_, data) =>
-        {
-            if (data.Data is not null)
-            {
-                Console.Error.WriteLine(data.Data);
-            }
-        };
-
         var cancelRequested = false;
         ConsoleCancelEventHandler? cancelHandler = null;
         cancelHandler = (_, e) =>
@@ -64,9 +48,6 @@ internal sealed class TrainingSessionRunner
                 throw new InvalidOperationException("Failed to start ML-Agents training process.");
             }
 
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-
             await process.WaitForExitAsync().ConfigureAwait(false);
             return process.ExitCode;
         }
@@ -81,8 +62,8 @@ internal sealed class TrainingSessionRunner
         var startInfo = new ProcessStartInfo
         {
             UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
+            RedirectStandardOutput = false,
+            RedirectStandardError = false,
             CreateNoWindow = true
         };
 
