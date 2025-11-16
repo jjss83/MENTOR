@@ -35,6 +35,7 @@ dotnet run -- \
 | `--base-port <port>` | Base communication port for the executable. Useful when running multiple instances. |
 | `--no-graphics` | Launches the Unity environment without rendering. |
 | `--skip-conda` | Run `mlagents-learn` directly from `PATH` instead of `conda run`. |
+| `--tensorboard` | Launch TensorBoard alongside training, pointing it at the resolved results directory. |
 
 The runner prints the resolved `mlagents-learn` command before launching and streams stdout/stderr to the console. Press `Ctrl+C` once to request a graceful shutdown; press again to force termination.
 

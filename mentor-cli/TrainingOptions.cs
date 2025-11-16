@@ -10,7 +10,8 @@ internal sealed record TrainingOptions(
     string CondaEnvironmentName,
     int? BasePort,
     bool NoGraphics,
-    bool SkipConda)
+    bool SkipConda,
+    bool LaunchTensorBoard)
 {
     private const string DefaultResultsDirectory = @"X:\\workspace\\ml-agents\\results";
     private const string DefaultCondaEnvironmentName = "mlagents";
@@ -141,6 +142,10 @@ internal sealed record TrainingOptions(
                     builder.SkipConda = true;
                     break;
 
+                case "tensorboard":
+                    builder.LaunchTensorBoard = true;
+                    break;
+
                 default:
                     error = $"Unknown option '--{key}'.";
                     return false;
@@ -176,7 +181,8 @@ internal sealed record TrainingOptions(
             builder.CondaEnvironmentName,
             builder.BasePort,
             builder.NoGraphics,
-            builder.SkipConda);
+            builder.SkipConda,
+            builder.LaunchTensorBoard);
 
         return true;
     }
@@ -238,5 +244,6 @@ internal sealed record TrainingOptions(
         public int? BasePort { get; set; }
         public bool NoGraphics { get; set; }
         public bool SkipConda { get; set; }
+        public bool LaunchTensorBoard { get; set; }
     }
 }

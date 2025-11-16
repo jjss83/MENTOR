@@ -41,5 +41,6 @@ internal static class Program
         Console.WriteLine("  --base-port <port>        Base port to use when launching the environment");
         Console.WriteLine("  --no-graphics             Launches the environment without rendering");
         Console.WriteLine("  --skip-conda              Assume the ML-Agents tooling is already on PATH");
+        Console.WriteLine("  --tensorboard             Also start TensorBoard pointed at the results directory");
     }
 }
