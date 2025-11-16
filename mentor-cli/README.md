@@ -39,6 +39,10 @@ dotnet run -- \
 
 The runner prints the resolved `mlagents-learn` command before launching and streams stdout/stderr to the console. Press `Ctrl+C` once to request a graceful shutdown; press again to force termination.
 
+### Watching Training Progress
+
+Pass `--tensorboard` to launch TensorBoard in parallel with `mlagents-learn`. The runner wires it to the resolved results directory and forwards its stdout so the `http://localhost:<port>/` URL appears directly in the console output.
+
 ## Example
 
 ```
