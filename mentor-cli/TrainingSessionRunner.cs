@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Text;
 
@@ -48,7 +49,10 @@ internal sealed class TrainingSessionRunner
                 throw new InvalidOperationException("Failed to start ML-Agents training process.");
             }
 
-            await process.WaitForExitAsync().ConfigureAwait(false);
+            var outputPump = PumpStreamAsync(process.StandardOutput.BaseStream, Console.OpenStandardOutput());
+            var errorPump = PumpStreamAsync(process.StandardError.BaseStream, Console.OpenStandardError());
+
+            await Task.WhenAll(process.WaitForExitAsync(), outputPump, errorPump).ConfigureAwait(false);
             return process.ExitCode;
         }
         finally
@@ -62,8 +66,8 @@ internal sealed class TrainingSessionRunner
         var startInfo = new ProcessStartInfo
         {
             UseShellExecute = false,
-            RedirectStandardOutput = false,
-            RedirectStandardError = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
             CreateNoWindow = true
         };
 
@@ -153,5 +157,31 @@ internal sealed class TrainingSessionRunner
         return value.Any(c => char.IsWhiteSpace(c) || c == '\"')
             ? $"\"{value.Replace("\"", "\\\"")}\""
             : value;
+    }
+
+    private static Task PumpStreamAsync(Stream source, Stream destination)
+    {
+        return Task.Run(async () =>
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(8192);
+            try
+            {
+                while (true)
+                {
+                    var bytesRead = await source.ReadAsync(buffer.AsMemory(0, buffer.Length)).ConfigureAwait(false);
+                    if (bytesRead == 0)
+                    {
+                        break;
+                    }
+
+                    await destination.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
+                    await destination.FlushAsync().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+        });
     }
 }
