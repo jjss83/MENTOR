@@ -1,0 +1,26 @@
+{
+  "id": "cooperativepushblock",
+  "name": "CooperativePushBlock",
+  "setup": "Several agents in an arena with blocks of different sizes that must be pushed into a goal zone; large blocks require cooperation.",
+  "goal": "Push all blocks into the goal, coordinating on large blocks that a single agent cannot move quickly.",
+  "agents": {
+    "count": 3,
+    "description": "Three agents that share a group reward and observe each other through a grid sensor."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "-0.0001 group penalty at each step.",
+      "+1, +2, or +3 group reward when a small, medium, or large block reaches the goal."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "None; observations come from a grid sensor that encodes blocks, goal, walls, and teammates.",
+    "actions": "1 discrete branch with 7 actions (rotate left/right, move in four directions, or stay still).",
+    "visual_observations": "None"
+  },
+  "float_properties": [],
+  "benchmark_mean_reward": 11.0,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/CooperativePushBlock/Scenes/CooperativePushBlock.unity",
+  "agent_script_file": "CooperativePushBlockAgent.cs",
+  "trainer_config_file": "CooperativePushBlock.yaml"
+}

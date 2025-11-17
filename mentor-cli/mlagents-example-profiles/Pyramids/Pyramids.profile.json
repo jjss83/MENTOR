@@ -1,0 +1,25 @@
+{
+  "id": "pyramids",
+  "name": "Pyramids",
+  "setup": "Agent presses a button to spawn a stack of blocks forming a pyramid, then navigates to reach a golden brick at the top.",
+  "goal": "Reach the golden brick with as few steps as possible.",
+  "agents": {
+    "count": 1,
+    "description": "Single agent interacting with switch, blocks, and golden brick."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "+2.0 for reaching the golden brick, reduced slightly for each step taken."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "Ray-based observations encoding walls, blocks, switch, and golden brick, plus switch state.",
+    "actions": "1 discrete branch with 4 actions (move forward/back or rotate left/right).",
+    "visual_observations": "None"
+  },
+  "float_properties": [],
+  "benchmark_mean_reward": 1.75,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/Pyramids/Scenes/Pyramids.unity",
+  "agent_script_file": "PyramidsAgent.cs",
+  "trainer_config_file": "Pyramids.yaml"
+}

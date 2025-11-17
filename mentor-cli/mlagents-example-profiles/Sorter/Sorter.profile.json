@@ -1,0 +1,33 @@
+{
+  "id": "sorter",
+  "name": "Sorter",
+  "setup": "Agent stands in a circular room with numbered tiles placed around it; each episode uses a random subset of values.",
+  "goal": "Visit all tiles in ascending numeric order.",
+  "agents": {
+    "count": 1,
+    "description": "Single agent moving continuously in the circular room."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "-0.0002 at each step.",
+      "+1.0 for visiting the correct next tile in the sequence.",
+      "-1.0 for visiting a wrong tile."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "4 floats for the agent's position and facing direction.",
+    "actions": "3 discrete branches for forward/backward, sideways movement, and rotation.",
+    "visual_observations": "None"
+  },
+  "float_properties": [
+    {
+      "name": "num_tiles",
+      "description": "Maximum number of tiles present in the episode.",
+      "default": 20
+    }
+  ],
+  "benchmark_mean_reward": null,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/Sorter/Scenes/Sorter.unity",
+  "agent_script_file": "SorterAgent.cs",
+  "trainer_config_file": "Sorter.yaml"
+}

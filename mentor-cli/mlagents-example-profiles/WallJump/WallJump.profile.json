@@ -1,0 +1,27 @@
+{
+  "id": "walljump",
+  "name": "WallJump",
+  "setup": "Platforming setup where the agent must get over a wall; a movable block can be used as a step for high walls.",
+  "goal": "Reach the goal area on the other side of the wall.",
+  "agents": {
+    "count": 1,
+    "description": "Single agent with different difficulty modes depending on wall height."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "-0.0005 at each step.",
+      "+1.0 when the agent reaches the goal.",
+      "-1.0 if the agent falls off the platform."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "Ray-based observation plus some global information (position and grounded flag).",
+    "actions": "4 discrete branches: move forward/back, rotate left/right, strafe, and jump.",
+    "visual_observations": "None"
+  },
+  "float_properties": [],
+  "benchmark_mean_reward": 0.8,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/WallJump/Scenes/WallJump.unity",
+  "agent_script_file": "WallJumpAgent.cs",
+  "trainer_config_file": "WallJump.yaml"
+}

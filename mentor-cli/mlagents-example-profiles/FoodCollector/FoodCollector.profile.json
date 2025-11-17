@@ -1,0 +1,37 @@
+{
+  "id": "foodcollector",
+  "name": "FoodCollector",
+  "setup": "Several agents in an arena with green (good) and red (bad) spheres; agents can move and shoot a ray to collect spheres.",
+  "goal": "Collect as many green spheres as possible while avoiding red ones.",
+  "agents": {
+    "count": 5,
+    "description": "Five agents sharing the same policy and acting in the same arena."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "+1.0 when the agent collects a green sphere.",
+      "-1.0 when the agent hits a red sphere."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "Velocity, frozen/shooting state, plus grid-based perception of nearby objects.",
+    "actions": "3 continuous actions for movement and rotation plus 1 discrete action for firing the ray.",
+    "visual_observations": "Optional first-person camera in the visual variant."
+  },
+  "float_properties": [
+    {
+      "name": "laser_length",
+      "description": "Length of the ray used to collect spheres.",
+      "default": 1.0
+    },
+    {
+      "name": "agent_scale",
+      "description": "Size of the agent model.",
+      "default": 1.0
+    }
+  ],
+  "benchmark_mean_reward": 10.0,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/FoodCollector/Scenes/FoodCollector.unity",
+  "agent_script_file": "FoodCollectorAgent.cs",
+  "trainer_config_file": "FoodCollector.yaml"
+}

@@ -66,3 +66,10 @@ dotnet run -- --env-path <path-to-env-exe> --config <trainer-config.yaml> [optio
 - **TensorBoard launch issues:** Confirm `tensorboard` is installed in the same Conda env or globally on PATH.
 
 Happy training! Keep TensorBoard artifacts and proprietary Unity builds outside Git to protect sensitive IP.
+## Run Reports
+Use the built-in report command to inspect an existing ML-Agents run without re-launching training:
+
+```bash
+dotnet run -- report --run-id <run-id> [--results-dir X:/path/to/results]
+```
+The command prints a JSON document that includes the `training_status.json` payload, `timers.json` (when present), and the saved `configuration.yaml` so you can archive or post-process the state of that run.

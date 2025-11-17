@@ -1,0 +1,47 @@
+{
+  "id": "pushblock",
+  "name": "PushBlock",
+  "setup": "Agent on a platform with a movable block and a goal region.",
+  "goal": "Push the block so that it touches or enters the goal region.",
+  "agents": {
+    "count": 1,
+    "description": "Single agent that can move and rotate while pushing the block."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "-0.0025 at each step.",
+      "+1.0 when the block is successfully pushed to the goal."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "Ray-based observation around the agent encoding walls, goal, and block.",
+    "actions": "1 discrete branch with 7 actions (rotate left/right, move in four directions, or do nothing).",
+    "visual_observations": "None"
+  },
+  "float_properties": [
+    {
+      "name": "block_scale",
+      "description": "Size of the block in the horizontal plane.",
+      "default": 2.0
+    },
+    {
+      "name": "dynamic_friction",
+      "description": "Dynamic friction on the ground.",
+      "default": 0.0
+    },
+    {
+      "name": "static_friction",
+      "description": "Static friction on the ground.",
+      "default": 0.0
+    },
+    {
+      "name": "block_drag",
+      "description": "Linear drag applied to the block.",
+      "default": 0.5
+    }
+  ],
+  "benchmark_mean_reward": 4.5,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/PushBlock/Scenes/PushBlock.unity",
+  "agent_script_file": "PushBlockAgent.cs",
+  "trainer_config_file": "PushBlock.yaml"
+}

@@ -1,0 +1,31 @@
+{
+  "id": "match3",
+  "name": "Match3",
+  "setup": "Match-3 puzzle board where tiles are swapped to create matches that clear and score points.",
+  "goal": "Maximize score over a sequence of moves by creating high-value matches.",
+  "agents": {
+    "count": null,
+    "description": "Each agent instance plays on its own board using the same policy."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "+0.01 for each normal tile cleared.",
+      "Larger reward for clearing special tiles created by longer matches."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "Custom Match-3 sensor encodes the board as a vector or visual representation.",
+    "actions": "Custom actuator chooses which tiles to swap.",
+    "visual_observations": "Can be encoded visually or purely as a vector state."
+  },
+  "float_properties": [],
+  "benchmark_mean_reward": {
+    "visual_observations": 39.5,
+    "vector_observations": 38.5,
+    "random_heuristic": 34.2,
+    "greedy_heuristic": 37.0
+  },
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/Match3/Scenes/Match3.unity",
+  "agent_script_file": "Match3Agent.cs",
+  "trainer_config_file": "Match3.yaml"
+}

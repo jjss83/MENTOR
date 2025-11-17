@@ -1,0 +1,39 @@
+{
+  "id": "strikersvsgoalie",
+  "name": "StrikersVsGoalie",
+  "setup": "Two striker agents try to score on a goal defended by a single goalie.",
+  "goal": "Strikers aim to score; the goalie aims to block shots and prevent goals.",
+  "agents": {
+    "count": 3,
+    "description": "Two strikers sharing one behavior and one goalie with a different behavior."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "Striker: +1.0 when the ball enters the goal.",
+      "Striker: small negative step reward to encourage quick play.",
+      "Goalie: -1.0 when a goal is scored.",
+      "Goalie: small positive existential reward each step."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "Striker: forward and backward rays encoding ball, goal, and other agents; Goalie: 360-degree rays encoding the same objects.",
+    "actions": "Both roles use 3 discrete branches for forward/backward, sideways, and rotation actions.",
+    "visual_observations": "None"
+  },
+  "float_properties": [
+    {
+      "name": "ball_scale",
+      "description": "Size of the soccer ball.",
+      "default": 7.5
+    },
+    {
+      "name": "gravity",
+      "description": "Gravity magnitude in the environment.",
+      "default": 9.81
+    }
+  ],
+  "benchmark_mean_reward": null,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/StrikersVsGoalie/Scenes/StrikersVsGoalie.unity",
+  "agent_script_file": "StrikersVsGoalieAgent.cs",
+  "trainer_config_file": "StrikersVsGoalie.yaml"
+}

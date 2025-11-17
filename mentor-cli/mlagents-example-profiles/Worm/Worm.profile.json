@@ -1,0 +1,27 @@
+{
+  "id": "worm",
+  "name": "Worm",
+  "setup": "Segmented worm-like body with joints between head and body segments.",
+  "goal": "Move the worm in the desired direction at the desired speed.",
+  "agents": {
+    "count": 10,
+    "description": "Ten worm agents moving independently with shared behavior parameters."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "Reward increases when body velocity matches the target velocity.",
+      "Reward increases when heading aligns with the goal direction.",
+      "Rewards are combined so that both speed and alignment matter."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "Moderate-size vector of joint positions, rotations, and velocities.",
+    "actions": "9 continuous actions controlling joint targets.",
+    "visual_observations": "None"
+  },
+  "float_properties": [],
+  "benchmark_mean_reward": 800.0,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/Worm/Scenes/Worm.unity",
+  "agent_script_file": "WormAgent.cs",
+  "trainer_config_file": "Worm.yaml"
+}

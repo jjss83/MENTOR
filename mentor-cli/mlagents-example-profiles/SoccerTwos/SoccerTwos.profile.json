@@ -1,0 +1,38 @@
+{
+  "id": "soccertwos",
+  "name": "SoccerTwos",
+  "setup": "Two-versus-two soccer match on a rectangular field with goals at each end.",
+  "goal": "Score in the opposing goal and prevent goals against your team.",
+  "agents": {
+    "count": 4,
+    "description": "Two teams of two agents each; all four agents use the same behavior but with team-specific rewards."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "+(1 - time_penalty) for scoring a goal against the opponent.",
+      "-1.0 when the opponent scores.",
+      "Small step penalty accumulating over the episode to encourage faster goals."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "Stacked ray-based observations around each agent, encoding ball, goals, teammates, and opponents.",
+    "actions": "3 discrete branches controlling forward/backward speed, sideways movement, and rotation.",
+    "visual_observations": "None"
+  },
+  "float_properties": [
+    {
+      "name": "ball_scale",
+      "description": "Size of the soccer ball.",
+      "default": 7.5
+    },
+    {
+      "name": "gravity",
+      "description": "Gravity magnitude in the environment.",
+      "default": 9.81
+    }
+  ],
+  "benchmark_mean_reward": null,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/SoccerTwos/Scenes/SoccerTwos.unity",
+  "agent_script_file": "SoccerTwosAgent.cs",
+  "trainer_config_file": "SoccerTwos.yaml"
+}

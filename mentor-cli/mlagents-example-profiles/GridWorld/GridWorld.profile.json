@@ -1,0 +1,27 @@
+{
+  "id": "gridworld",
+  "name": "GridWorld",
+  "setup": "Top-down grid world with colored goal squares and obstacles; the correct goal color can change.",
+  "goal": "Navigate to the goal square that matches the current target color while avoiding incorrect goals and walls.",
+  "agents": {
+    "count": 9,
+    "description": "Nine agents moving on their own grids but sharing the same behavior."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "-0.01 at each step.",
+      "+1.0 for reaching the correct goal (episode ends).",
+      "-1.0 for reaching an incorrect goal (episode ends)."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "None; the grid is observed visually plus a goal signal.",
+    "actions": "1 discrete branch with 5 actions (move north, south, east, west, or stay put).",
+    "visual_observations": "Single top-down camera showing the grid and colored goals."
+  },
+  "float_properties": [],
+  "benchmark_mean_reward": 0.8,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/GridWorld/Scenes/GridWorld.unity",
+  "agent_script_file": "GridWorldAgent.cs",
+  "trainer_config_file": "GridWorld.yaml"
+}

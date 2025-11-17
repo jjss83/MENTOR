@@ -1,0 +1,27 @@
+{
+  "id": "crawler",
+  "name": "Crawler",
+  "setup": "Four-legged creature with multiple joints moving over a flat surface.",
+  "goal": "Move in a target direction at the requested speed without falling.",
+  "agents": {
+    "count": 10,
+    "description": "Ten independent crawler agents using the same policy."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "Reward increases when body velocity matches the target velocity.",
+      "Reward increases when body orientation aligns with the goal direction.",
+      "Rewards are combined so the agent must satisfy speed and alignment together."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "High-dimensional vector of joint positions, rotations, velocities, and body acceleration.",
+    "actions": "20 continuous actions controlling target rotations for the joints.",
+    "visual_observations": "None"
+  },
+  "float_properties": [],
+  "benchmark_mean_reward": 3000.0,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/Crawler/Scenes/Crawler.unity",
+  "agent_script_file": "CrawlerAgent.cs",
+  "trainer_config_file": "Crawler.yaml"
+}

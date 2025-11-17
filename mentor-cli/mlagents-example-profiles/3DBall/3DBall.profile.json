@@ -1,0 +1,42 @@
+{
+  "id": "3dball",
+  "name": "3DBall",
+  "setup": "Multiple platforms where each agent balances a ball by tilting a cube in 3D.",
+  "goal": "Keep the ball from falling off the platform for as long as possible.",
+  "agents": {
+    "count": 12,
+    "description": "Twelve identical agents, each on its own platform, sharing the same policy."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "+0.1 each step while the ball stays on the platform.",
+      "-1.0 when the ball falls off, ending the episode for that agent."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "Small vector of cube rotation plus ball position/velocity (fewer variables in the hard variant).",
+    "actions": "2 continuous actions controlling tilt of the platform around X and Z axes.",
+    "visual_observations": "None for 3DBall; a separate Visual3DBall scene uses a camera instead."
+  },
+  "float_properties": [
+    {
+      "name": "scale",
+      "description": "Uniform scale of the ball.",
+      "default": 1.0
+    },
+    {
+      "name": "gravity",
+      "description": "Gravity magnitude used in the scene.",
+      "default": 9.81
+    },
+    {
+      "name": "mass",
+      "description": "Mass of the ball.",
+      "default": 1.0
+    }
+  ],
+  "benchmark_mean_reward": 100.0,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/3DBall/Scenes/3DBall.unity",
+  "agent_script_file": "3DBallAgent.cs",
+  "trainer_config_file": "3DBall.yaml"
+}

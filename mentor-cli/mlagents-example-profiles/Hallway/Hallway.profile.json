@@ -1,0 +1,27 @@
+{
+  "id": "hallway",
+  "name": "Hallway",
+  "setup": "Agent first sees a colored cue block, then moves down a hallway and must pick the matching colored goal.",
+  "goal": "Reach the goal that matches the initial cue color.",
+  "agents": {
+    "count": 1,
+    "description": "Single agent that must remember the cue after it is no longer visible."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "+1.0 for reaching the correct goal.",
+      "-0.1 for reaching an incorrect goal.",
+      "-0.0003 at each step."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "Ray-based observation of nearby walls and goals.",
+    "actions": "1 discrete branch with 4 actions (move forward/back or rotate left/right).",
+    "visual_observations": "None"
+  },
+  "float_properties": [],
+  "benchmark_mean_reward": 0.7,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/Hallway/Scenes/Hallway.unity",
+  "agent_script_file": "HallwayAgent.cs",
+  "trainer_config_file": "Hallway.yaml"
+}

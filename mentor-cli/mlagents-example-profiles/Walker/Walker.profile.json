@@ -1,0 +1,48 @@
+{
+  "id": "walker",
+  "name": "Walker",
+  "setup": "Humanoid character with many joints walking over flat ground.",
+  "goal": "Walk in the desired direction at the desired speed without falling.",
+  "agents": {
+    "count": 10,
+    "description": "Ten humanoid agents each learning from the same policy."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "Reward increases when body velocity matches the target velocity.",
+      "Reward increases when facing direction aligns with the goal direction.",
+      "Reward is structured so balance, direction, and speed must all be good simultaneously."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "Large vector of joint positions, velocities, and body state.",
+    "actions": "39 continuous actions controlling target rotations and strengths for all joints.",
+    "visual_observations": "None"
+  },
+  "float_properties": [
+    {
+      "name": "gravity",
+      "description": "Gravity magnitude in the scene.",
+      "default": 9.81
+    },
+    {
+      "name": "hip_mass",
+      "description": "Mass of the hip segment.",
+      "default": 8.0
+    },
+    {
+      "name": "chest_mass",
+      "description": "Mass of the chest segment.",
+      "default": 8.0
+    },
+    {
+      "name": "spine_mass",
+      "description": "Mass of the spine segment.",
+      "default": 8.0
+    }
+  ],
+  "benchmark_mean_reward": 2500.0,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/Walker/Scenes/Walker.unity",
+  "agent_script_file": "WalkerAgent.cs",
+  "trainer_config_file": "Walker.yaml"
+}
