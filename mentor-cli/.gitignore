@@ -386,3 +386,8 @@ FodyWeavers.xsd
 
 # Unity ML-Agents specific files
 testfile
+
+mentor-cli/obj/Debug/net9.0/MentorTrainingRunner.AssemblyInfo.cs
+mentor-cli/obj/Debug/net9.0/MentorTrainingRunner.AssemblyInfoInputs.cache
+obj/
+bin/
