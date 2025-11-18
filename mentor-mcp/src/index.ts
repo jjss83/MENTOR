@@ -22,6 +22,11 @@ const trainingSchema = z.object({
   tensorboard: z.boolean().optional(),
 });
 
+const trainStatusSchema = z.object({
+  runId: z.string(),
+  resultsDir: z.string().optional(),
+});
+
 const reportSchema = z.object({
   runId: z.string(),
   resultsDir: z.string().optional(),
@@ -48,12 +53,24 @@ server.registerTool(
 server.registerTool(
   "train",
   {
-    description: "Run mentor-cli training via mentor-api",
+    description: "Start mentor-cli training via mentor-api and return run info",
     inputSchema: trainingSchema,
   },
   async (input) => {
-    const result = await postText("/train", normalizeBody(input));
-    return asText(result);
+    const json = await postJson<unknown>("/train", normalizeBody(input));
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "train-status",
+  {
+    description: "Check mentor-cli training status via mentor-api",
+    inputSchema: trainStatusSchema,
+  },
+  async (input) => {
+    const json = await postJson<unknown>("/train-status", normalizeBody(input));
+    return asText(JSON.stringify(json, null, 2));
   }
 );
 
@@ -125,21 +142,6 @@ async function postJson<TResponse>(path: string, body: unknown): Promise<TRespon
   } catch (err) {
     throw new Error(`Expected JSON from ${path} but got: ${text}`);
   }
-}
-
-async function postText(path: string, body: unknown): Promise<string> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(formatError(path, response.status, response.statusText, text));
-  }
-
-  return text;
 }
 
 async function getJson<TResponse>(path: string): Promise<TResponse> {
