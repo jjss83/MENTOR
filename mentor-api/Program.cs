@@ -42,7 +42,8 @@ app.MapPost("/train", (TrainingRequest request) =>
         runId = startResult.Run.RunId,
         status = "running",
         resultsDirectory = startResult.Run.ResultsDirectory,
-        logPath = startResult.Run.LogPath
+        logPath = startResult.Run.LogPath,
+        tensorboardUrl = startResult.Run.TensorboardUrl
     });
 });
 
@@ -252,7 +253,8 @@ internal sealed record TrainingStatusPayload(
     int? ExitCode,
     string? ResultsDirectory,
     string? TrainingStatusPath,
-    string? Message)
+    string? Message,
+    string? TensorboardUrl)
 {
     public static TrainingStatusPayload FromFiles(string runId, string resultsDirectory)
     {
@@ -261,7 +263,7 @@ internal sealed record TrainingStatusPayload(
         {
             var statusText = TryReadStatus(trainingStatusPath);
             var normalized = NormalizeStatus(statusText);
-            return new TrainingStatusPayload(runId, normalized, Completed: true, ExitCode: null, resultsDirectory, trainingStatusPath, null);
+            return new TrainingStatusPayload(runId, normalized, Completed: true, ExitCode: null, resultsDirectory, trainingStatusPath, null, TensorboardUrl: null);
         }
 
         var runDirectory = TrainingRunStore.BuildRunDirectory(resultsDirectory, runId);
@@ -274,7 +276,8 @@ internal sealed record TrainingStatusPayload(
                 ExitCode: null,
                 resultsDirectory,
                 trainingStatusPath,
-                "Run directory exists but training_status.json has not been written yet.");
+                "Run directory exists but training_status.json has not been written yet.",
+                TensorboardUrl: null);
         }
 
         return new TrainingStatusPayload(
@@ -284,7 +287,8 @@ internal sealed record TrainingStatusPayload(
             ExitCode: null,
             resultsDirectory,
             trainingStatusPath,
-            $"No run data found at '{runDirectory}'.");
+            $"No run data found at '{runDirectory}'.",
+            TensorboardUrl: null);
     }
 
     private static string NormalizeStatus(string? status)
@@ -398,13 +402,15 @@ internal sealed class TrainingRunState
     public string RunId { get; }
     public string ResultsDirectory { get; }
     public string LogPath { get; }
+    public string? TensorboardUrl { get; }
     public Task<TrainingRunOutcome> RunTask { get; }
 
-    private TrainingRunState(string runId, string resultsDirectory, string logPath, Task<TrainingRunOutcome> runTask)
+    private TrainingRunState(string runId, string resultsDirectory, string logPath, string? tensorboardUrl, Task<TrainingRunOutcome> runTask)
     {
         RunId = runId;
         ResultsDirectory = resultsDirectory;
         LogPath = logPath;
+        TensorboardUrl = tensorboardUrl;
         RunTask = runTask;
     }
 
@@ -446,7 +452,7 @@ internal sealed class TrainingRunState
             }
         });
 
-        return new TrainingRunState(options.RunId, options.ResultsDirectory, logPath, runTask);
+        return new TrainingRunState(options.RunId, options.ResultsDirectory, logPath, options.LaunchTensorBoard ? "http://localhost:6006" : null, runTask);
     }
 
     public bool IsCompleted => RunTask.IsCompleted;
@@ -478,7 +484,7 @@ internal sealed class TrainingRunState
         var trainingStatusPath = TrainingRunStore.BuildTrainingStatusPath(ResultsDirectory, RunId);
         var completed = status != "running";
 
-        return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message);
+        return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message, TensorboardUrl);
     }
 }
 
