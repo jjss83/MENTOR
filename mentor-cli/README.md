@@ -36,7 +36,7 @@ dotnet run -- --env-path <path-to-env-exe> --config <trainer-config.yaml> [optio
 | --- | --- | --- |
 | `--env-path <path>` | Yes | Absolute or relative path to the Unity environment executable. Validated before launch. |
 | `--config <path>` | Yes | Trainer configuration YAML passed directly to `mlagents-learn`. |
-| `--run-id <id>` | No | Friendly name for the session. Defaults to `run_<UTC timestamp>`. |
+| `--run-id <id>` | No | Friendly name for the session. Defaults to `run-<behavior>-<UTC timestamp>` (behavior taken from the trainer config when available). |
 | `--results-dir <path>` | No | Storage for TensorBoard summaries and checkpoints. Default: `X:\workspace\ml-agents\results`. Directories are created automatically. |
 | `--conda-env <name>` | No | Conda environment that contains ML-Agents (default `mlagents`). Combine with `--skip-conda` if the environment is already activated. |
 | `--skip-conda` | No | Invoke `mlagents-learn`/`tensorboard` from PATH instead of `conda run`. |

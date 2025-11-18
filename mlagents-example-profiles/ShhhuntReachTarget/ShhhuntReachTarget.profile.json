@@ -1,0 +1,75 @@
+{
+  "id": "shhhunt-reach-target",
+  "name": "ShhhuntReachTarget",
+  "setup": "A single third-person character controlled by ML-Agents must navigate over a flat ground area to reach a target object. The agent uses a ThirdPersonController-based movement adapter and starts at random positions within a square training area.",
+  "goal": "Learn to efficiently move toward and touch the target object from random starting positions without falling off the platform or wandering too far away.",
+  "agents": {
+    "count": 1,
+    "description": "A single agent instance in the scene using a ThirdPersonControllerAdapter for locomotion. The setup can later be extended to multiple identical agents sharing the same policy."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "+1.0 when the agent comes within the targetReachedThreshold distance of the target, ending the episode as a success.",
+      "Shaping reward proportional to the reduction in distance to the target each step, scaled by distanceRewardScale.",
+      "Small negative time penalty each step (timePenalty) to encourage shorter paths and faster completion.",
+      "-1.0 if the agent becomes too far from the target (beyond maxDistanceFromTarget), ending the episode as a failure.",
+      "-1.0 if the agent falls below the fallThreshold (off the platform), ending the episode as a failure."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "10-dimensional vector observation: relative position from agent to target (3), agent velocity normalized by maxSpeed (3), sine of the agent's Y rotation (1), normalized distance to the target (1), and target direction expressed in the agent's local space X/Z components (2).",
+    "actions": "2 continuous actions: forward/backward and left/right movement inputs mapped into the ThirdPersonControllerAdapter.",
+    "visual_observations": "None in the base setup; perception is purely via vector observations derived from positions and velocity."
+  },
+  "float_properties": [
+    {
+      "name": "targetReachedThreshold",
+      "description": "Distance threshold within which the episode is considered a success and a large positive reward is granted.",
+      "default": 1.5
+    },
+    {
+      "name": "fallThreshold",
+      "description": "Y-position below which the agent is considered to have fallen off the platform and the episode ends with a negative reward.",
+      "default": -5.0
+    },
+    {
+      "name": "maxDistanceFromTarget",
+      "description": "Maximum allowed distance between agent and target; exceeding this ends the episode with a negative reward.",
+      "default": 100.0
+    },
+    {
+      "name": "maxDistance",
+      "description": "Maximum distance used for normalizing position and distance observations (should roughly match the training area size).",
+      "default": 50.0
+    },
+    {
+      "name": "maxSpeed",
+      "description": "Maximum agent speed used to normalize the velocity observations (e.g., ThirdPersonController sprint speed).",
+      "default": 5.335
+    },
+    {
+      "name": "distanceRewardScale",
+      "description": "Scale factor applied to distance-based shaping reward each step.",
+      "default": 0.005
+    },
+    {
+      "name": "timePenalty",
+      "description": "Per-step negative reward to penalize longer trajectories and encourage efficiency.",
+      "default": -0.0001
+    },
+    {
+      "name": "spawnAreaSizeX",
+      "description": "Half-width of the square area in which the agent and target can be spawned randomly along the X-axis.",
+      "default": 20.0
+    },
+    {
+      "name": "spawnAreaSizeZ",
+      "description": "Half-width of the square area in which the agent and target can be spawned randomly along the Z-axis.",
+      "default": 20.0
+    }
+  ],
+  "benchmark_mean_reward": null,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/ShhhuntReachTarget/ShhhuntReachTarget.unity",
+  "agent_script_file": "MLReachTargetAgent.cs",
+  "trainer_config_file": "ShhhuntReachTarget.yaml"
+}

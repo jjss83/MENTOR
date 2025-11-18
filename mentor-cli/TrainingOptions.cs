@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace MentorTrainingRunner;
 
@@ -170,7 +171,7 @@ internal sealed record TrainingOptions(
             return false;
         }
 
-        builder.RunId ??= $"run_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
+        builder.RunId ??= BuildDefaultRunId(builder.TrainerConfigPath);
         builder.CondaEnvironmentName ??= DefaultCondaEnvironmentName;
 
         options = new TrainingOptions(
@@ -232,6 +233,134 @@ internal sealed record TrainingOptions(
             error = $"Failed to resolve directory path '{path}': {ex.Message}";
             return null;
         }
+    }
+
+    private static string BuildDefaultRunId(string? trainerConfigPath)
+    {
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+        var behavior = TryExtractBehaviorName(trainerConfigPath);
+
+        if (string.IsNullOrWhiteSpace(behavior))
+        {
+            return $"run-{timestamp}";
+        }
+
+        return $"run-{behavior}-{timestamp}";
+    }
+
+    private static string? TryExtractBehaviorName(string? trainerConfigPath)
+    {
+        if (string.IsNullOrWhiteSpace(trainerConfigPath) || !File.Exists(trainerConfigPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var inBehaviors = false;
+            var behaviorsIndent = 0;
+
+            foreach (var rawLine in File.ReadLines(trainerConfigPath))
+            {
+                if (string.IsNullOrWhiteSpace(rawLine))
+                {
+                    continue;
+                }
+
+                var indent = CountLeadingSpaces(rawLine);
+                var trimmed = rawLine.Trim();
+
+                if (trimmed.StartsWith("#", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (!inBehaviors)
+                {
+                    if (trimmed.StartsWith("behaviors:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        inBehaviors = true;
+                        behaviorsIndent = indent;
+                    }
+
+                    continue;
+                }
+
+                if (indent <= behaviorsIndent)
+                {
+                    break;
+                }
+
+                var colonIndex = trimmed.IndexOf(':');
+                if (colonIndex <= 0)
+                {
+                    continue;
+                }
+
+                var behaviorName = trimmed[..colonIndex].Trim();
+                var normalized = NormalizeBehaviorName(behaviorName);
+                if (!string.IsNullOrWhiteSpace(normalized))
+                {
+                    return normalized;
+                }
+            }
+        }
+        catch
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    private static int CountLeadingSpaces(string text)
+    {
+        var count = 0;
+        foreach (var ch in text)
+        {
+            if (ch == ' ')
+            {
+                count++;
+            }
+            else if (ch == '\t')
+            {
+                count += 2;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return count;
+    }
+
+    private static string? NormalizeBehaviorName(string behaviorName)
+    {
+        if (string.IsNullOrWhiteSpace(behaviorName))
+        {
+            return null;
+        }
+
+        var buffer = new StringBuilder(behaviorName.Length);
+        foreach (var ch in behaviorName)
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                buffer.Append(char.ToLowerInvariant(ch));
+            }
+            else if (ch is '-' or '_')
+            {
+                buffer.Append(ch);
+            }
+            else
+            {
+                buffer.Append('-');
+            }
+        }
+
+        var normalized = buffer.ToString().Trim('-');
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
     }
 
     private sealed class OptionsBuilder
