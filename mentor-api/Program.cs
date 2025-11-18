@@ -11,6 +11,13 @@ var app = builder.Build();
 
 var runStore = new TrainingRunStore();
 
+Console.WriteLine("[Resume] Checking for unfinished training runs...");
+var resumeMessages = runStore.ResumeUnfinishedRuns(msg => Console.WriteLine($"[Resume] {msg}"));
+if (resumeMessages.Count == 0)
+{
+    Console.WriteLine("[Resume] No unfinished training runs found.");
+}
+
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapPost("/train", (TrainingRequest request) =>
@@ -356,6 +363,82 @@ internal sealed class TrainingRunStore
         return TrainingStatusPayload.FromFiles(runId, resultsDir);
     }
 
+    public IReadOnlyList<string> ResumeUnfinishedRuns(Action<string>? log = null, string? resultsDirOverride = null)
+    {
+        var messages = new List<string>();
+        var resultsDir = ResolveResultsDirectory(resultsDirOverride);
+
+        if (!Directory.Exists(resultsDir))
+        {
+            var msg = $"Results directory '{resultsDir}' does not exist. Nothing to resume.";
+            messages.Add(msg);
+            log?.Invoke(msg);
+            return messages;
+        }
+
+        foreach (var runDirectory in Directory.EnumerateDirectories(resultsDir))
+        {
+            var runId = Path.GetFileName(runDirectory);
+            var statusPath = BuildTrainingStatusPath(resultsDir, runId);
+            var status = TryReadStatusFromFile(statusPath);
+            if (IsCompletedStatus(status))
+            {
+                continue;
+            }
+
+            var metadata = TrainingRunMetadata.TryLoad(runDirectory);
+            if (metadata is null)
+            {
+                var skipped = $"Skipped '{runId}' because run_metadata.json is missing or unreadable.";
+                messages.Add(skipped);
+                log?.Invoke(skipped);
+                continue;
+            }
+
+            var startResult = TryStart(metadata.ToOptions());
+            var statusLabel = string.IsNullOrWhiteSpace(status) ? "unknown" : status!.ToLowerInvariant();
+            if (startResult.IsStarted && startResult.Run is not null)
+            {
+                var resumed = $"Resumed unfinished training '{runId}' (previous status: {statusLabel}).";
+                messages.Add(resumed);
+                log?.Invoke(resumed);
+            }
+            else
+            {
+                var conflict = startResult.Message ?? $"Training run '{runId}' is already active.";
+                messages.Add(conflict);
+                log?.Invoke(conflict);
+            }
+        }
+
+        return messages;
+    }
+
+    private static bool IsCompletedStatus(string? status)
+    {
+        var normalized = status?.ToLowerInvariant();
+        return normalized is "succeeded" or "success" or "failed" or "failure" or "completed";
+    }
+
+    private static string? TryReadStatusFromFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var node = JsonNode.Parse(stream);
+            return node?["status"]?.GetValue<string>();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static string ResolveResultsDirectory(string? resultsDirOverride)
     {
         if (!string.IsNullOrWhiteSpace(resultsDirOverride))
@@ -391,6 +474,7 @@ internal sealed class TrainingRunStore
     }
 }
 
+
 internal sealed class TrainingRunState
 {
     public string RunId { get; }
@@ -410,8 +494,10 @@ internal sealed class TrainingRunState
 
     public static TrainingRunState StartNew(TrainingOptions options)
     {
-        var runLogsDirectory = Path.Combine(options.ResultsDirectory, options.RunId, "run_logs");
+        var runDirectory = Path.Combine(options.ResultsDirectory, options.RunId);
+        var runLogsDirectory = Path.Combine(runDirectory, "run_logs");
         Directory.CreateDirectory(runLogsDirectory);
+        TrainingRunMetadata.Save(runDirectory, options);
 
         var logPath = Path.Combine(runLogsDirectory, "mentor-api.log");
         var outputStream = new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
@@ -479,6 +565,78 @@ internal sealed class TrainingRunState
         var completed = status != "running";
 
         return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message, TensorboardUrl);
+    }
+}
+
+internal sealed record TrainingRunMetadata(
+    string EnvPath,
+    string ConfigPath,
+    string RunId,
+    string ResultsDirectory,
+    string CondaEnvironmentName,
+    int? BasePort,
+    bool NoGraphics,
+    bool SkipConda,
+    bool LaunchTensorboard)
+{
+    private const string MetadataFileName = "run_metadata.json";
+
+    public static void Save(string runDirectory, TrainingOptions options)
+    {
+        var metadataPath = BuildMetadataPath(runDirectory);
+        Directory.CreateDirectory(Path.GetDirectoryName(metadataPath)!);
+
+        var metadata = new TrainingRunMetadata(
+            options.EnvExecutablePath,
+            options.TrainerConfigPath,
+            options.RunId,
+            options.ResultsDirectory,
+            options.CondaEnvironmentName,
+            options.BasePort,
+            options.NoGraphics,
+            options.SkipConda,
+            options.LaunchTensorBoard);
+
+        var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(metadataPath, json);
+    }
+
+    public static TrainingRunMetadata? TryLoad(string runDirectory)
+    {
+        var metadataPath = BuildMetadataPath(runDirectory);
+        if (!File.Exists(metadataPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(metadataPath);
+            return JsonSerializer.Deserialize<TrainingRunMetadata>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public TrainingOptions ToOptions()
+    {
+        return new TrainingOptions(
+            EnvPath,
+            ConfigPath,
+            RunId,
+            ResultsDirectory,
+            CondaEnvironmentName,
+            BasePort,
+            NoGraphics,
+            SkipConda,
+            LaunchTensorboard);
+    }
+
+    private static string BuildMetadataPath(string runDirectory)
+    {
+        return Path.Combine(runDirectory, "run_logs", MetadataFileName);
     }
 }
 
