@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Net;
 using System.Net.Sockets;
+using System.Globalization;
 
 namespace MentorTrainingRunner;
 
@@ -14,7 +15,8 @@ internal sealed class TrainingSessionRunner
     private readonly TextWriter _errorWriter;
     private readonly Stream _standardOutput;
     private readonly Stream _standardError;
-    private readonly bool _enableConsoleCancel;`n    private readonly int? _tensorboardPort;
+    private readonly bool _enableConsoleCancel;
+    private readonly int? _tensorboardPort;
 
     public TrainingSessionRunner(
         TrainingOptions options,
@@ -29,7 +31,8 @@ internal sealed class TrainingSessionRunner
         _errorWriter = errorWriter ?? Console.Error;
         _standardOutput = standardOutput ?? Console.OpenStandardOutput();
         _standardError = standardError ?? Console.OpenStandardError();
-        _enableConsoleCancel = enableConsoleCancel;`n        _tensorboardPort = tensorboardPort ?? (_options.LaunchTensorBoard ? FindAvailablePort(DefaultTensorboardPort) : null);
+        _enableConsoleCancel = enableConsoleCancel;
+        _tensorboardPort = tensorboardPort ?? (_options.LaunchTensorBoard ? FindAvailablePort(DefaultTensorboardPort) : null);
     }
 
     public string? TensorboardUrl => _tensorboardPort.HasValue ? $"http://localhost:{_tensorboardPort.Value}" : null;
@@ -140,6 +143,8 @@ internal sealed class TrainingSessionRunner
             CreateNoWindow = true
         };
 
+        SetIsolatedTempDirectory(startInfo);
+
         if (_options.SkipConda)
         {
             startInfo.FileName = "mlagents-learn";
@@ -187,6 +192,8 @@ internal sealed class TrainingSessionRunner
             CreateNoWindow = true
         };
 
+        SetIsolatedTempDirectory(startInfo);
+
         if (_options.SkipConda)
         {
             startInfo.FileName = "tensorboard";
@@ -213,6 +220,19 @@ internal sealed class TrainingSessionRunner
         startInfo.ArgumentList.Add("localhost" );
 
         return new Process { StartInfo = startInfo };
+    }
+
+    private static void SetIsolatedTempDirectory(ProcessStartInfo startInfo)
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "mentor-cli");
+        Directory.CreateDirectory(tempRoot);
+
+        var isolatedTemp = Path.Combine(tempRoot, Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(isolatedTemp);
+
+        startInfo.Environment["TMP"] = isolatedTemp;
+        startInfo.Environment["TEMP"] = isolatedTemp;
+        startInfo.Environment["TMPDIR"] = isolatedTemp;
     }
 
     private static string ResolveCondaExecutable()
@@ -286,7 +306,23 @@ internal sealed class TrainingSessionRunner
             : value;
     }
 
-    private static int FindAvailablePort(int preferredPort)`n    {`n        try`n        {`n            using var listener = new TcpListener(IPAddress.Loopback, preferredPort);`n            listener.Start();`n            return ((IPEndPoint)listener.LocalEndpoint).Port;`n        }`n        catch`n        {`n            using var fallback = new TcpListener(IPAddress.Loopback, 0);`n            fallback.Start();`n            return ((IPEndPoint)fallback.LocalEndpoint).Port;`n        }`n    }`n`n    private static Task PumpStreamAsync(Stream source, Stream destination)
+    private static int FindAvailablePort(int preferredPort)
+    {
+        try
+        {
+            using var listener = new TcpListener(IPAddress.Loopback, preferredPort);
+            listener.Start();
+            return ((IPEndPoint)listener.LocalEndpoint).Port;
+        }
+        catch
+        {
+            using var fallback = new TcpListener(IPAddress.Loopback, 0);
+            fallback.Start();
+            return ((IPEndPoint)fallback.LocalEndpoint).Port;
+        }
+    }
+
+    private static Task PumpStreamAsync(Stream source, Stream destination)
     {
         return Task.Run(async () =>
         {
