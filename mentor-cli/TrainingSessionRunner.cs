@@ -1,17 +1,20 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Text;
+using System.Net;
+using System.Net.Sockets;
 
 namespace MentorTrainingRunner;
 
 internal sealed class TrainingSessionRunner
 {
+    private const int DefaultTensorboardPort = 6006;
     private readonly TrainingOptions _options;
     private readonly TextWriter _outputWriter;
     private readonly TextWriter _errorWriter;
     private readonly Stream _standardOutput;
     private readonly Stream _standardError;
-    private readonly bool _enableConsoleCancel;
+    private readonly bool _enableConsoleCancel;`n    private readonly int? _tensorboardPort;
 
     public TrainingSessionRunner(
         TrainingOptions options,
@@ -19,15 +22,17 @@ internal sealed class TrainingSessionRunner
         TextWriter? errorWriter = null,
         Stream? standardOutput = null,
         Stream? standardError = null,
-        bool enableConsoleCancel = true)
+        bool enableConsoleCancel = true, int? tensorboardPort = null)
     {
         _options = options;
         _outputWriter = outputWriter ?? Console.Out;
         _errorWriter = errorWriter ?? Console.Error;
         _standardOutput = standardOutput ?? Console.OpenStandardOutput();
         _standardError = standardError ?? Console.OpenStandardError();
-        _enableConsoleCancel = enableConsoleCancel;
+        _enableConsoleCancel = enableConsoleCancel;`n        _tensorboardPort = tensorboardPort ?? (_options.LaunchTensorBoard ? FindAvailablePort(DefaultTensorboardPort) : null);
     }
+
+    public string? TensorboardUrl => _tensorboardPort.HasValue ? $"http://localhost:{_tensorboardPort.Value}" : null;
 
     public async Task<int> RunAsync()
     {
@@ -195,8 +200,17 @@ internal sealed class TrainingSessionRunner
             startInfo.ArgumentList.Add("tensorboard");
         }
 
-        startInfo.ArgumentList.Add("--logdir");
+        startInfo.ArgumentList.Add("--logdir" );
         startInfo.ArgumentList.Add(_options.ResultsDirectory);
+
+        if (_tensorboardPort.HasValue)
+        {
+            startInfo.ArgumentList.Add("--port" );
+            startInfo.ArgumentList.Add(_tensorboardPort.Value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        startInfo.ArgumentList.Add("--host" );
+        startInfo.ArgumentList.Add("localhost" );
 
         return new Process { StartInfo = startInfo };
     }
@@ -272,7 +286,7 @@ internal sealed class TrainingSessionRunner
             : value;
     }
 
-    private static Task PumpStreamAsync(Stream source, Stream destination)
+    private static int FindAvailablePort(int preferredPort)`n    {`n        try`n        {`n            using var listener = new TcpListener(IPAddress.Loopback, preferredPort);`n            listener.Start();`n            return ((IPEndPoint)listener.LocalEndpoint).Port;`n        }`n        catch`n        {`n            using var fallback = new TcpListener(IPAddress.Loopback, 0);`n            fallback.Start();`n            return ((IPEndPoint)fallback.LocalEndpoint).Port;`n        }`n    }`n`n    private static Task PumpStreamAsync(Stream source, Stream destination)
     {
         return Task.Run(async () =>
         {
@@ -298,3 +312,5 @@ internal sealed class TrainingSessionRunner
         });
     }
 }
+
+

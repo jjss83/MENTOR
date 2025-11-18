@@ -139,12 +139,6 @@ internal static class CliArgs
             "--env-path", request.EnvPath!,
             "--config", request.Config!,
         };
-
-        if (!string.IsNullOrWhiteSpace(request.RunId))
-        {
-            args.AddRange(new[] { "--run-id", request.RunId! });
-        }
-
         if (!string.IsNullOrWhiteSpace(request.ResultsDir))
         {
             args.AddRange(new[] { "--results-dir", request.ResultsDir! });
@@ -496,3 +490,5 @@ internal sealed record TrainingRunOutcome(int? ExitCode, Exception? Error)
 
     public static TrainingRunOutcome FromError(Exception ex) => new(null, ex);
 }
+
+
