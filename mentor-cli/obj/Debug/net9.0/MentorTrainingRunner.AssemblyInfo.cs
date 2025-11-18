@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MentorTrainingRunner")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8a8398824d12f451a54fb443ba198adf17447817")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c19a694b5da697398ab647fac46d1bce7c325bb0")]
 [assembly: System.Reflection.AssemblyProductAttribute("MentorTrainingRunner")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MentorTrainingRunner")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

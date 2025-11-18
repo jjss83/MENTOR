@@ -58,6 +58,11 @@ internal sealed class ReportInterpreterRunner
             EmitPayload(payload, completion);
             return 0;
         }
+        catch (OpenAiResponseException ex)
+        {
+            EmitPayload(payload, note: $"LLM call failed after retries: {(int)ex.StatusCode} {ex.StatusCode} body: {ex.ResponseBody}");
+            return 1;
+        }
         catch (Exception ex)
         {
             EmitPayload(payload, note: $"LLM call failed after retries: {ex.Message}");
@@ -87,6 +92,11 @@ internal sealed class ReportInterpreterRunner
             EmitPayload(payload, completion);
             return 0;
         }
+        catch (OpenAiResponseException ex)
+        {
+            EmitPayload(payload, note: $"LLM call failed after retries: {(int)ex.StatusCode} {ex.StatusCode} body: {ex.ResponseBody}");
+            return 1;
+        }
         catch (Exception ex)
         {
             EmitPayload(payload, note: $"LLM call failed after retries: {ex.Message}");
@@ -110,6 +120,13 @@ internal sealed class ReportInterpreterRunner
 
         var serializerOptions = new JsonSerializerOptions { WriteIndented = true };
         Console.WriteLine(root.ToJsonString(serializerOptions));
+
+        if (!string.IsNullOrWhiteSpace(completion))
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- OpenAI Response (plain text) ---");
+            Console.WriteLine(completion);
+        }
     }
 
     private async Task<string> CallOpenAiWithRetryAsync(string apiKey, JsonObject payload, string userPrompt, CancellationToken cancellationToken)
@@ -123,14 +140,9 @@ internal sealed class ReportInterpreterRunner
             {
                 return await CallOpenAiAsync(apiKey, payload, userPrompt, cancellationToken);
             }
-            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+            catch (OpenAiResponseException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests && attempt < MaxRetries)
             {
                 lastError = ex;
-                if (attempt == MaxRetries)
-                {
-                    break;
-                }
-
                 await Task.Delay(delayMs, cancellationToken);
                 delayMs *= 2;
             }
@@ -149,6 +161,7 @@ internal sealed class ReportInterpreterRunner
         using var client = new HttpClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("MentorTrainingRunner/1.0");
 
         var systemPrompt = "You are the Report Interpreter Agent for Mentor CLI runs. Given the JSON payload, explain the current results concisely: identify run-id, missing artifacts, summarize training_status checkpoints/metadata, timers highlights, and configuration notes. Keep it short and actionable.";
 
@@ -165,7 +178,13 @@ internal sealed class ReportInterpreterRunner
 
         var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
         using var response = await client.PostAsync("https://api.openai.com/v1/chat/completions", content, cancellationToken);
-        response.EnsureSuccessStatusCode();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            var truncated = responseBody.Length > 4000 ? responseBody[..4000] + "..." : responseBody;
+            throw new OpenAiResponseException(response.StatusCode, truncated);
+        }
 
         using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var doc = await JsonDocument.ParseAsync(responseStream, cancellationToken: cancellationToken);
@@ -176,5 +195,18 @@ internal sealed class ReportInterpreterRunner
         }
 
         return message;
+    }
+}
+
+internal sealed class OpenAiResponseException : Exception
+{
+    public HttpStatusCode StatusCode { get; }
+    public string ResponseBody { get; }
+
+    public OpenAiResponseException(HttpStatusCode statusCode, string responseBody)
+        : base($"OpenAI call failed with status {(int)statusCode} {statusCode}")
+    {
+        StatusCode = statusCode;
+        ResponseBody = responseBody;
     }
 }
