@@ -1,0 +1,6 @@
+{
+  "name": "ReportInterpreter",
+  "description": "Routes Mentor CLI run reports to the Report Interpreter agent with a prompt.",
+  "prompt": "Explain current results",
+  "agent": "ReportInterpreter"
+}

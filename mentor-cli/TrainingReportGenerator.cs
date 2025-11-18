@@ -15,27 +15,36 @@ internal sealed class TrainingReportGenerator
 
     public async Task<int> RunAsync(CancellationToken cancellationToken = default)
     {
+        var report = await GenerateReportAsync(cancellationToken);
+        var serializerOptions = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+        };
+
+        Console.WriteLine(report.ToJsonString(serializerOptions));
+        return 0;
+    }
+
+    public async Task<JsonObject> GenerateReportAsync(CancellationToken cancellationToken = default)
+    {
         var runDirectory = Path.Combine(options.ResultsDirectory, options.RunId);
         if (!Directory.Exists(runDirectory))
         {
-            Console.Error.WriteLine($"Run directory not found at '{runDirectory}'.");
-            return 1;
+            throw new InvalidOperationException($"Run directory not found at '{runDirectory}'.");
         }
 
         var runLogsDirectory = Path.Combine(runDirectory, "run_logs");
         if (!Directory.Exists(runLogsDirectory))
         {
-            Console.Error.WriteLine($"Run logs directory not found at '{runLogsDirectory}'.");
-            return 1;
+            throw new InvalidOperationException($"Run logs directory not found at '{runLogsDirectory}'.");
         }
 
         var trainingStatusPath = Path.Combine(runLogsDirectory, "training_status.json");
         if (!File.Exists(trainingStatusPath))
         {
-            Console.Error.WriteLine(
+            throw new InvalidOperationException(
                 $"training_status.json not found at '{trainingStatusPath}'. Ensure the run completed successfully."
             );
-            return 1;
         }
 
         var reportRoot = new JsonObject
@@ -75,14 +84,7 @@ internal sealed class TrainingReportGenerator
         }
 
         reportRoot["artifacts"] = artifacts;
-
-        var serializerOptions = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-        };
-
-        Console.WriteLine(reportRoot.ToJsonString(serializerOptions));
-        return 0;
+        return reportRoot;
     }
 
     private static JsonObject BuildArtifact(string path, JsonNode? content)
@@ -117,4 +119,3 @@ internal sealed class TrainingReportGenerator
         return node;
     }
 }
-

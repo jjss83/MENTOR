@@ -73,3 +73,25 @@ Use the built-in report command to inspect an existing ML-Agents run without re-
 dotnet run -- report --run-id <run-id> [--results-dir X:/path/to/results]
 ```
 The command prints a JSON document that includes the `training_status.json` payload, `timers.json` (when present), and the saved `configuration.yaml` so you can archive or post-process the state of that run.
+### Interpret Reports
+Pipe a run directly into the interpreter to get an agent-friendly payload:
+
+```bash
+dotnet run -- report-interpreter --run-id <run-id> [--results-dir X:/path/to/results] [--prompt "Explain current results"]
+```
+The command emits JSON containing the prompt, agent name, and the embedded report so downstream MCP tooling can respond.
+To auto-interpret with OpenAI (set `OPENAI_API_KEY` or pass `--openai-api-key`):
+
+```bash
+dotnet run -- report-interpreter --run-id <run-id> \
+  [--results-dir X:/path/to/results] \
+  [--prompt "Explain current results"] \
+  [--openai-model gpt-4o-mini]
+```
+If no API key is available, the command still prints the payload for manual MCP use.
+To verify connectivity without parsing a run, add `--check-openai` (requires `OPENAI_API_KEY` or `--openai-api-key`):
+
+```bash
+dotnet run -- report-interpreter --run-id <run-id> --check-openai [--openai-model gpt-4o-mini]
+```
+This skips report generation and performs a simple echo call to OpenAI.
