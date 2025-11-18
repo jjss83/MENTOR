@@ -3,7 +3,9 @@ using System.Diagnostics;
 using System.Text;
 using System.Net;
 using System.Net.Sockets;
+using System.Net.NetworkInformation;
 using System.Globalization;
+using System.Linq;
 
 namespace MentorTrainingRunner;
 
@@ -17,6 +19,7 @@ internal sealed class TrainingSessionRunner
     private readonly Stream _standardError;
     private readonly bool _enableConsoleCancel;
     private readonly int? _tensorboardPort;
+    private bool _reuseExistingTensorboard;
 
     public TrainingSessionRunner(
         TrainingOptions options,
@@ -32,7 +35,7 @@ internal sealed class TrainingSessionRunner
         _standardOutput = standardOutput ?? Console.OpenStandardOutput();
         _standardError = standardError ?? Console.OpenStandardError();
         _enableConsoleCancel = enableConsoleCancel;
-        _tensorboardPort = tensorboardPort ?? (_options.LaunchTensorBoard ? FindAvailablePort(DefaultTensorboardPort) : null);
+        _tensorboardPort = _options.LaunchTensorBoard ? DetermineTensorboardPort(tensorboardPort) : tensorboardPort;
     }
 
     public string? TensorboardUrl => _tensorboardPort.HasValue ? $"http://localhost:{_tensorboardPort.Value}" : null;
@@ -42,7 +45,7 @@ internal sealed class TrainingSessionRunner
         Directory.CreateDirectory(_options.ResultsDirectory);
 
         using var process = CreateProcess();
-        using var tensorboardProcess = _options.LaunchTensorBoard ? CreateTensorBoardProcess() : null;
+        using var tensorboardProcess = _options.LaunchTensorBoard && !_reuseExistingTensorboard ? CreateTensorBoardProcess() : null;
         WriteLine($"Writing training artifacts to '{_options.ResultsDirectory}'.");
         WriteLine();
         WriteLine("Starting training session with command:");
@@ -54,6 +57,11 @@ internal sealed class TrainingSessionRunner
         {
             WriteLine("Starting TensorBoard in parallel with command:");
             WriteLine(FormatCommand(tensorboardProcess.StartInfo));
+            WriteLine();
+        }
+        else if (_options.LaunchTensorBoard && _reuseExistingTensorboard && _tensorboardPort.HasValue)
+        {
+            WriteLine($"TensorBoard already running on port {_tensorboardPort.Value}; not launching another instance.");
             WriteLine();
         }
 
@@ -130,6 +138,32 @@ internal sealed class TrainingSessionRunner
             {
                 Console.CancelKeyPress -= cancelHandler;
             }
+        }
+    }
+
+    private int? DetermineTensorboardPort(int? explicitPort)
+    {
+        var desiredPort = explicitPort ?? DefaultTensorboardPort;
+        if (IsPortInUse(desiredPort))
+        {
+            _reuseExistingTensorboard = true;
+            return desiredPort;
+        }
+
+        _reuseExistingTensorboard = false;
+        return desiredPort;
+    }
+
+    private static bool IsPortInUse(int port)
+    {
+        try
+        {
+            var listeners = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners();
+            return listeners.Any(ep => ep.Port == port);
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -304,22 +338,6 @@ internal sealed class TrainingSessionRunner
         return value.Any(c => char.IsWhiteSpace(c) || c == '\"')
             ? $"\"{value.Replace("\"", "\\\"")}\""
             : value;
-    }
-
-    private static int FindAvailablePort(int preferredPort)
-    {
-        try
-        {
-            using var listener = new TcpListener(IPAddress.Loopback, preferredPort);
-            listener.Start();
-            return ((IPEndPoint)listener.LocalEndpoint).Port;
-        }
-        catch
-        {
-            using var fallback = new TcpListener(IPAddress.Loopback, 0);
-            fallback.Start();
-            return ((IPEndPoint)fallback.LocalEndpoint).Port;
-        }
     }
 
     private static Task PumpStreamAsync(Stream source, Stream destination)
