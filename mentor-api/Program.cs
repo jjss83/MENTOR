@@ -21,13 +21,11 @@ if (resumeMessages.Count == 0)
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapPost("/train", (TrainingRequest request) =>
-{
-    if (string.IsNullOrWhiteSpace(request.EnvPath) || string.IsNullOrWhiteSpace(request.Config))
-    {
-        return Results.BadRequest(new { error = "envPath and config are required.", usage = UsageText.GetTrainingUsage() });
-    }
+{    var resolvedEnvPath = string.IsNullOrWhiteSpace(request.EnvPath) ? null : request.EnvPath;
+    var resolvedConfig = string.IsNullOrWhiteSpace(request.Config) ? "config/ppo/3DBall.yaml" : request.Config;
+    var resolvedRunId = string.IsNullOrWhiteSpace(request.RunId) ? "first3DBallRun" : request.RunId;
 
-    var cliArgs = CliArgs.FromTraining(request).ToArray();
+    var cliArgs = CliArgs.FromTraining(request, resolvedEnvPath, resolvedConfig, resolvedRunId).ToArray();
     if (!TrainingOptions.TryParse(cliArgs, out var options, out var error) || options is null)
     {
         return Results.BadRequest(new { error = error ?? "Invalid training options.", usage = UsageText.GetTrainingUsage() });
@@ -139,13 +137,26 @@ app.Run();
 
 internal static class CliArgs
 {
-    public static List<string> FromTraining(TrainingRequest request)
+    public static List<string> FromTraining(TrainingRequest request, string? envPathOverride = null, string? configOverride = null, string? runIdOverride = null)
     {
-        var args = new List<string>
+        var envPath = envPathOverride ?? request.EnvPath;
+        var config = configOverride ?? request.Config;
+        var args = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(envPath))
         {
-            "--env-path", request.EnvPath!,
-            "--config", request.Config!,
-        };
+            args.AddRange(new[] { "--env-path", envPath! });
+        }
+
+        if (!string.IsNullOrWhiteSpace(config))
+        {
+            args.AddRange(new[] { "--config", config! });
+        }
+
+        if (!string.IsNullOrWhiteSpace(runIdOverride))
+        {
+            args.AddRange(new[] { "--run-id", runIdOverride! });
+        }
         if (!string.IsNullOrWhiteSpace(request.ResultsDir))
         {
             args.AddRange(new[] { "--results-dir", request.ResultsDir! });
@@ -225,9 +236,9 @@ internal static class CliArgs
 }
 
 internal sealed record TrainingRequest(
-    string? EnvPath,
-    string? Config,
-    string? RunId,
+    string? EnvPath = null,
+    string? Config = null,
+    string? RunId = null,
     string? ResultsDir,
     string? CondaEnv,
     int? BasePort,
@@ -569,7 +580,7 @@ internal sealed class TrainingRunState
 }
 
 internal sealed record TrainingRunMetadata(
-    string EnvPath,
+    string? EnvPath,
     string ConfigPath,
     string RunId,
     string ResultsDirectory,

@@ -201,7 +201,12 @@ internal sealed class TrainingSessionRunner
     {
         arguments.Add(_options.TrainerConfigPath);
         arguments.Add($"--run-id={_options.RunId}");
-        arguments.Add($"--env={_options.EnvExecutablePath}");
+
+        if (!string.IsNullOrWhiteSpace(_options.EnvExecutablePath))
+        {
+            arguments.Add($"--env={_options.EnvExecutablePath}");
+        }
+
         arguments.Add($"--results-dir={_options.ResultsDirectory}");
         arguments.Add("--force");
 

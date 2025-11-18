@@ -4,7 +4,7 @@ using System.Text;
 namespace MentorTrainingRunner;
 
 internal sealed record TrainingOptions(
-    string EnvExecutablePath,
+    string? EnvExecutablePath,
     string TrainerConfigPath,
     string RunId,
     string ResultsDirectory,
@@ -151,12 +151,6 @@ internal sealed record TrainingOptions(
                     error = $"Unknown option '--{key}'.";
                     return false;
             }
-        }
-
-        if (builder.EnvExecutablePath is null)
-        {
-            error = "--env-path is required.";
-            return false;
         }
 
         if (builder.TrainerConfigPath is null)
