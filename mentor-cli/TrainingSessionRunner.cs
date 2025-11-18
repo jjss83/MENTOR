@@ -7,10 +7,26 @@ namespace MentorTrainingRunner;
 internal sealed class TrainingSessionRunner
 {
     private readonly TrainingOptions _options;
+    private readonly TextWriter _outputWriter;
+    private readonly TextWriter _errorWriter;
+    private readonly Stream _standardOutput;
+    private readonly Stream _standardError;
+    private readonly bool _enableConsoleCancel;
 
-    public TrainingSessionRunner(TrainingOptions options)
+    public TrainingSessionRunner(
+        TrainingOptions options,
+        TextWriter? outputWriter = null,
+        TextWriter? errorWriter = null,
+        Stream? standardOutput = null,
+        Stream? standardError = null,
+        bool enableConsoleCancel = true)
     {
         _options = options;
+        _outputWriter = outputWriter ?? Console.Out;
+        _errorWriter = errorWriter ?? Console.Error;
+        _standardOutput = standardOutput ?? Console.OpenStandardOutput();
+        _standardError = standardError ?? Console.OpenStandardError();
+        _enableConsoleCancel = enableConsoleCancel;
     }
 
     public async Task<int> RunAsync()
@@ -19,42 +35,46 @@ internal sealed class TrainingSessionRunner
 
         using var process = CreateProcess();
         using var tensorboardProcess = _options.LaunchTensorBoard ? CreateTensorBoardProcess() : null;
-        Console.WriteLine($"Writing training artifacts to '{_options.ResultsDirectory}'.");
-        Console.WriteLine();
-        Console.WriteLine("Starting training session with command:");
-        Console.WriteLine(FormatCommand(process.StartInfo));
-        Console.WriteLine();
+        WriteLine($"Writing training artifacts to '{_options.ResultsDirectory}'.");
+        WriteLine();
+        WriteLine("Starting training session with command:");
+        WriteLine(FormatCommand(process.StartInfo));
+        WriteLine();
 
         Task? tensorboardTask = null;
         if (tensorboardProcess is not null)
         {
-            Console.WriteLine("Starting TensorBoard in parallel with command:");
-            Console.WriteLine(FormatCommand(tensorboardProcess.StartInfo));
-            Console.WriteLine();
+            WriteLine("Starting TensorBoard in parallel with command:");
+            WriteLine(FormatCommand(tensorboardProcess.StartInfo));
+            WriteLine();
         }
 
         var cancelRequested = false;
         ConsoleCancelEventHandler? cancelHandler = null;
-        cancelHandler = (_, e) =>
+        if (_enableConsoleCancel)
         {
-            if (!cancelRequested)
+            cancelHandler = (_, e) =>
             {
-                cancelRequested = true;
-                e.Cancel = true;
-                Console.WriteLine("Cancellation requested. Stopping ML-Agents process...");
-                TryTerminateProcessTree(process);
-                if (tensorboardProcess is not null)
+                if (!cancelRequested)
                 {
-                    Console.WriteLine("Stopping TensorBoard process...");
-                    TryTerminateProcessTree(tensorboardProcess);
+                    cancelRequested = true;
+                    e.Cancel = true;
+                    WriteLine("Cancellation requested. Stopping ML-Agents process...");
+                    TryTerminateProcessTree(process);
+                    if (tensorboardProcess is not null)
+                    {
+                        WriteLine("Stopping TensorBoard process...");
+                        TryTerminateProcessTree(tensorboardProcess);
+                    }
                 }
-            }
-            else
-            {
-                e.Cancel = false;
-            }
-        };
-        Console.CancelKeyPress += cancelHandler;
+                else
+                {
+                    e.Cancel = false;
+                }
+            };
+
+            Console.CancelKeyPress += cancelHandler;
+        }
 
         try
         {
@@ -65,8 +85,8 @@ internal sealed class TrainingSessionRunner
                     throw new InvalidOperationException("Failed to start TensorBoard process.");
                 }
 
-                var tensorboardOutputPump = PumpStreamAsync(tensorboardProcess.StandardOutput.BaseStream, Console.OpenStandardOutput());
-                var tensorboardErrorPump = PumpStreamAsync(tensorboardProcess.StandardError.BaseStream, Console.OpenStandardError());
+                var tensorboardOutputPump = PumpStreamAsync(tensorboardProcess.StandardOutput.BaseStream, _standardOutput);
+                var tensorboardErrorPump = PumpStreamAsync(tensorboardProcess.StandardError.BaseStream, _standardError);
                 var tensorboardWait = tensorboardProcess.WaitForExitAsync();
                 tensorboardTask = Task.WhenAll(tensorboardOutputPump, tensorboardErrorPump, tensorboardWait);
             }
@@ -76,16 +96,16 @@ internal sealed class TrainingSessionRunner
                 throw new InvalidOperationException("Failed to start ML-Agents training process.");
             }
 
-            var outputPump = PumpStreamAsync(process.StandardOutput.BaseStream, Console.OpenStandardOutput());
-            var errorPump = PumpStreamAsync(process.StandardError.BaseStream, Console.OpenStandardError());
+            var outputPump = PumpStreamAsync(process.StandardOutput.BaseStream, _standardOutput);
+            var errorPump = PumpStreamAsync(process.StandardError.BaseStream, _standardError);
 
             await Task.WhenAll(process.WaitForExitAsync(), outputPump, errorPump).ConfigureAwait(false);
             var exitCode = process.ExitCode;
 
             if (tensorboardProcess is not null && !tensorboardProcess.HasExited)
             {
-                Console.WriteLine();
-                Console.WriteLine("Training session finished. Stopping TensorBoard...");
+                WriteLine();
+                WriteLine("Training session finished. Stopping TensorBoard...");
                 TryTerminateProcessTree(tensorboardProcess);
             }
 
@@ -98,7 +118,10 @@ internal sealed class TrainingSessionRunner
         }
         finally
         {
-            Console.CancelKeyPress -= cancelHandler;
+            if (_enableConsoleCancel && cancelHandler is not null)
+            {
+                Console.CancelKeyPress -= cancelHandler;
+            }
         }
     }
 
@@ -189,7 +212,7 @@ internal sealed class TrainingSessionRunner
         return "conda";
     }
 
-    private static void TryTerminateProcessTree(Process process)
+    private void TryTerminateProcessTree(Process process)
     {
         try
         {
@@ -200,8 +223,28 @@ internal sealed class TrainingSessionRunner
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Failed to terminate training process: {ex.Message}");
+            WriteError($"Failed to terminate training process: {ex.Message}");
         }
+    }
+
+    private void WriteLine(string? message = null)
+    {
+        if (message is null)
+        {
+            _outputWriter.WriteLine();
+        }
+        else
+        {
+            _outputWriter.WriteLine(message);
+        }
+
+        _outputWriter.Flush();
+    }
+
+    private void WriteError(string message)
+    {
+        _errorWriter.WriteLine(message);
+        _errorWriter.Flush();
     }
 
     private static string FormatCommand(ProcessStartInfo startInfo)

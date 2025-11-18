@@ -10,11 +10,18 @@ namespace MentorTrainingRunner;
 internal sealed class ReportInterpreterRunner
 {
     private readonly ReportInterpreterOptions options;
+    private readonly TextWriter outputWriter;
+    private readonly TextWriter errorWriter;
     private const int MaxRetries = 3;
 
-    public ReportInterpreterRunner(ReportInterpreterOptions options)
+    public ReportInterpreterRunner(
+        ReportInterpreterOptions options,
+        TextWriter? outputWriter = null,
+        TextWriter? errorWriter = null)
     {
         this.options = options;
+        this.outputWriter = outputWriter ?? Console.Out;
+        this.errorWriter = errorWriter ?? Console.Error;
     }
 
     public async Task<int> RunAsync(CancellationToken cancellationToken = default)
@@ -34,7 +41,7 @@ internal sealed class ReportInterpreterRunner
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Failed to generate report: {ex.Message}");
+            WriteError($"Failed to generate report: {ex.Message}");
             return 1;
         }
 
@@ -119,13 +126,13 @@ internal sealed class ReportInterpreterRunner
         };
 
         var serializerOptions = new JsonSerializerOptions { WriteIndented = true };
-        Console.WriteLine(root.ToJsonString(serializerOptions));
+        WriteLine(root.ToJsonString(serializerOptions));
 
         if (!string.IsNullOrWhiteSpace(completion))
         {
-            Console.WriteLine();
-            Console.WriteLine("--- OpenAI Response (plain text) ---");
-            Console.WriteLine(completion);
+            WriteLine();
+            WriteLine("--- OpenAI Response (plain text) ---");
+            WriteLine(completion);
         }
     }
 
@@ -195,6 +202,26 @@ internal sealed class ReportInterpreterRunner
         }
 
         return message;
+    }
+
+    private void WriteLine(string? message = null)
+    {
+        if (message is null)
+        {
+            outputWriter.WriteLine();
+        }
+        else
+        {
+            outputWriter.WriteLine(message);
+        }
+
+        outputWriter.Flush();
+    }
+
+    private void WriteError(string message)
+    {
+        errorWriter.WriteLine(message);
+        errorWriter.Flush();
     }
 }
 

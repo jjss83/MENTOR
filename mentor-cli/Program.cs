@@ -99,22 +99,7 @@ internal static class Program
             Console.Error.WriteLine();
         }
 
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  dotnet run -- --env-path <path-to-env-exe> --config <trainer-config.yaml> [options]\n");
-        Console.WriteLine("Options:");
-        Console.WriteLine("  --run-id <id>             Optional run identifier. Default: run_<UTC timestamp>");
-        Console.WriteLine("  --results-dir <path>      Directory to store training artifacts. Default: X:\\workspace\\ml-agents\\results");
-        Console.WriteLine("  --conda-env <name>        Name of the ML-Agents Conda environment. Default: mlagents");
-        Console.WriteLine("  --base-port <port>        Base port to use when launching the environment");
-        Console.WriteLine("  --no-graphics             Launches the environment without rendering");
-        Console.WriteLine("  --skip-conda              Assume the ML-Agents tooling is already on PATH");
-        Console.WriteLine("  --tensorboard             Also start TensorBoard pointed at the results directory");
-        Console.WriteLine();
-        Console.WriteLine("Report usage:");
-        Console.WriteLine("  dotnet run -- report --run-id <id> [--results-dir <path>]");
-        Console.WriteLine();
-        Console.WriteLine("Report interpreter usage:");
-        Console.WriteLine("  dotnet run -- report-interpreter --run-id <id> [--results-dir <path>] [--prompt \"Explain current results\"] [--openai-model <model>] [--openai-api-key <key>] [--check-openai]");
+        Console.Write(UsageText.GetTrainingUsage());
     }
 
     private static void PrintReportUsage(string? error)
@@ -125,11 +110,7 @@ internal static class Program
             Console.Error.WriteLine();
         }
 
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  dotnet run -- report --run-id <id> [--results-dir <path>]\n");
-        Console.WriteLine("Options:");
-        Console.WriteLine("  --run-id <id>        Run identifier to inspect (required)");
-        Console.WriteLine("  --results-dir <path> Directory that contains run artifacts. Default: X:\\workspace\\ml-agents\\results");
+        Console.Write(UsageText.GetReportUsage());
     }
 
     private static void PrintReportInterpreterUsage(string? error)
@@ -140,14 +121,6 @@ internal static class Program
             Console.Error.WriteLine();
         }
 
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  dotnet run -- report-interpreter --run-id <id> [--results-dir <path>] [--prompt <text>] [--openai-model <model>] [--openai-api-key <key>] [--check-openai]\n");
-        Console.WriteLine("Options:");
-        Console.WriteLine("  --run-id <id>        Run identifier to inspect (required)");
-        Console.WriteLine("  --results-dir <path> Directory that contains run artifacts. Default: X:\\workspace\\ml-agents\\results");
-        Console.WriteLine("  --prompt <text>      Prompt to send along with the report. Default: Explain current results");
-        Console.WriteLine("  --openai-model <m>   OpenAI chat completion model. Default: gpt-4o-mini");
-        Console.WriteLine("  --openai-api-key <k> Explicit API key (otherwise uses OPENAI_API_KEY env var)");
-        Console.WriteLine("  --check-openai       Skip report generation and issue a simple connectivity check call");
+        Console.Write(UsageText.GetReportInterpreterUsage());
     }
 }
