@@ -236,27 +236,27 @@ internal static class CliArgs
 }
 
 internal sealed record TrainingRequest(
-    string? EnvPath = null,
-    string? Config = null,
-    string? RunId = null,
     string? ResultsDir,
     string? CondaEnv,
     int? BasePort,
     bool? NoGraphics,
     bool? SkipConda,
-    bool? Tensorboard);
+    bool? Tensorboard,
+    string? EnvPath = null,
+    string? Config = null,
+    string? RunId = null);
 
-internal sealed record TrainingStatusRequest(string? RunId, string? ResultsDir);
+internal sealed record TrainingStatusRequest(string? ResultsDir, string? RunId = null);
 
-internal sealed record ReportRequest(string? RunId, string? ResultsDir);
+internal sealed record ReportRequest(string? ResultsDir, string? RunId = null);
 
 internal sealed record ReportInterpreterRequest(
-    string? RunId,
     string? ResultsDir,
     string? Prompt,
     string? OpenAiModel,
     string? OpenAiApiKey,
-    bool? CheckOpenAi);
+    bool? CheckOpenAi,
+    string? RunId = null);
 
 internal sealed record TrainingStatusPayload(
     string RunId,
@@ -401,6 +401,14 @@ internal sealed class TrainingRunStore
             if (metadata is null)
             {
                 var skipped = $"Skipped '{runId}' because run_metadata.json is missing or unreadable.";
+                messages.Add(skipped);
+                log?.Invoke(skipped);
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(metadata.EnvPath) || !File.Exists(metadata.EnvPath) || !string.Equals(Path.GetExtension(metadata.EnvPath), ".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                var skipped = $"Skipped '{runId}' because envPath is missing or not a valid .exe ({metadata.EnvPath ?? "<null>"}).";
                 messages.Add(skipped);
                 log?.Invoke(skipped);
                 continue;
