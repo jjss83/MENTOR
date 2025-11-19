@@ -1,0 +1,14 @@
+Using launch settings from X:\workspace\MENTOR\mentor-api\Properties\launchSettings.json...
+Building...
+[Resume] Checking for unfinished training runs...
+[Resume] Resumed unfinished training 'run-3dball-20251119-034133' (previous status: unknown).
+[Resume] Resumed unfinished training 'run-reachtarget-20251119-035018' (previous status: unknown).
+[Resume] Resumed unfinished training 'run-reachtarget-20251119-035616' (previous status: unknown).
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5113
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: X:\workspace\MENTOR\mentor-api

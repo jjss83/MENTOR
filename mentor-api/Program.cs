@@ -6,8 +6,16 @@ using MentorTrainingRunner;
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(o => o.AllowSynchronousIO = true);
 builder.WebHost.UseUrls("http://localhost:5113");
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 var runStore = new TrainingRunStore();
 
@@ -23,7 +31,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapPost("/train", (TrainingRequest request) =>
 {    var resolvedEnvPath = string.IsNullOrWhiteSpace(request.EnvPath) ? null : request.EnvPath;
     var resolvedConfig = string.IsNullOrWhiteSpace(request.Config) ? "config/ppo/3DBall.yaml" : request.Config;
-    var resolvedRunId = string.IsNullOrWhiteSpace(request.RunId) ? "first3DBallRun" : request.RunId;
+    var resolvedRunId = string.IsNullOrWhiteSpace(request.RunId) ? null : request.RunId;
 
     var cliArgs = CliArgs.FromTraining(request, resolvedEnvPath, resolvedConfig, resolvedRunId).ToArray();
     if (!TrainingOptions.TryParse(cliArgs, out var options, out var error) || options is null)
