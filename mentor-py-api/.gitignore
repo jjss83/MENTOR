@@ -1,0 +1,56 @@
+# Bytecode and cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment directories and tooling
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.*
+.conda/
+.python-version
+
+# Build and packaging artifacts
+build/
+dist/
+.eggs/
+*.egg
+*.egg-info/
+*.whl
+pip-wheel-metadata/
+wheelhouse/
+
+# Testing and coverage
+.tox/
+.nox/
+.pytest_cache/
+.coverage
+.coverage.*
+.cache/
+.hypothesis/
+pytestdebug.log
+
+# Type checking and lint caches
+.mypy_cache/
+.pyre/
+.pytype/
+.ruff_cache/
+.dmypy.json
+
+# IDE and editor metadata
+.idea/
+.vscode/
+*.code-workspace
+
+# Operating system junk
+.DS_Store
+Thumbs.db
+
+# Project-specific generated data
+mentor_py_api.egg-info/
+results/
+run_logs/
+training_runs/

@@ -31,7 +31,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapPost("/train", (TrainingRequest request) =>
 {    var resolvedEnvPath = string.IsNullOrWhiteSpace(request.EnvPath) ? null : request.EnvPath;
     var resolvedConfig = string.IsNullOrWhiteSpace(request.Config) ? "config/ppo/3DBall.yaml" : request.Config;
-    var resolvedRunId = string.IsNullOrWhiteSpace(request.RunId) ? null : request.RunId;
+    var resolvedRunId = NormalizeRunId(request.RunId);
 
     var cliArgs = CliArgs.FromTraining(request, resolvedEnvPath, resolvedConfig, resolvedRunId).ToArray();
     if (!TrainingOptions.TryParse(cliArgs, out var options, out var error) || options is null)
@@ -142,6 +142,19 @@ app.MapPost("/report-interpreter", async (ReportInterpreterRequest request) =>
 });
 
 app.Run();
+
+static string? NormalizeRunId(string? requestedRunId)
+{
+    if (string.IsNullOrWhiteSpace(requestedRunId))
+    {
+        return null;
+    }
+
+    var trimmed = requestedRunId.Trim();
+    return string.Equals(trimmed, "first3DBallRun", StringComparison.OrdinalIgnoreCase)
+        ? null
+        : trimmed;
+}
 
 internal static class CliArgs
 {
