@@ -39,6 +39,9 @@ python -m mentor_py_api
 uvicorn mentor_py_api.app:app --host 0.0.0.0 --port 5113 --reload
 ```
 
+
+Once the server is running, open http://127.0.0.1:5113/swagger for the Swagger UI (the JSON lives at /swagger/v1/swagger.json). This mirrors the .NET mentor-api surface so tooling that expects /swagger keeps working.
+
 When the server starts it logs "[Resume]" messages while scanning `X:\workspace\ml-agents\results` (or the directory you configure) for unfinished runs and reattaches to them.
 
 ## Training lifecycle

@@ -3,7 +3,8 @@ from __future__ import annotations
 import io
 import json
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from .cli_args import from_report, from_report_interpreter, from_training
 from .models import ReportInterpreterRequest, ReportRequest, TrainingRequest, TrainingStatusRequest
@@ -16,6 +17,30 @@ from .usage_text import get_report_interpreter_usage, get_report_usage, get_trai
 app = FastAPI(title="Mentor Py API", version="0.1.0")
 run_store = TrainingRunStore()
 
+
+SWAGGER_UI_ROUTE = "/swagger"
+SWAGGER_JSON_ROUTE = "/swagger/v1/swagger.json"
+SWAGGER_OAUTH_ROUTE = "/swagger/oauth2-redirect"
+
+
+@app.get(SWAGGER_UI_ROUTE, include_in_schema=False)
+async def swagger_ui() -> HTMLResponse:
+    return get_swagger_ui_html(
+        openapi_url=SWAGGER_JSON_ROUTE,
+        title="Mentor Py API - Swagger UI",
+        oauth2_redirect_url=SWAGGER_OAUTH_ROUTE,
+        swagger_ui_parameters={"displayRequestDuration": True},
+    )
+
+
+@app.get(SWAGGER_OAUTH_ROUTE, include_in_schema=False)
+async def swagger_ui_redirect() -> HTMLResponse:
+    return get_swagger_ui_oauth2_redirect_html()
+
+
+@app.get(SWAGGER_JSON_ROUTE, include_in_schema=False)
+async def swagger_json() -> JSONResponse:
+    return JSONResponse(app.openapi())
 
 @app.on_event("startup")
 async def startup_event() -> None:
@@ -145,3 +170,4 @@ def _normalize_run_id(requested_run_id: str | None) -> str | None:
 
 def create_app() -> FastAPI:
     return app
+
