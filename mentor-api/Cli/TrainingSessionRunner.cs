@@ -12,6 +12,10 @@ namespace MentorTrainingRunner;
 internal sealed class TrainingSessionRunner
 {
     private const int DefaultTensorboardPort = 6006;
+    private const int DefaultBasePort = 5005;
+    private const int BasePortBlockSize = 20;
+    private const int BasePortStride = BasePortBlockSize;
+    private const int MaxBasePortProbes = 200;
     private readonly TrainingOptions _options;
     private readonly TextWriter _outputWriter;
     private readonly TextWriter _errorWriter;
@@ -19,6 +23,8 @@ internal sealed class TrainingSessionRunner
     private readonly Stream _standardError;
     private readonly bool _enableConsoleCancel;
     private readonly int? _tensorboardPort;
+    private readonly int _basePort;
+    private readonly string? _basePortMessage;
     private bool _reuseExistingTensorboard;
 
     public TrainingSessionRunner(
@@ -36,6 +42,7 @@ internal sealed class TrainingSessionRunner
         _standardError = standardError ?? Console.OpenStandardError();
         _enableConsoleCancel = enableConsoleCancel;
         _tensorboardPort = _options.LaunchTensorBoard ? DetermineTensorboardPort(tensorboardPort) : tensorboardPort;
+        _basePort = ResolveBasePort(out _basePortMessage);
     }
 
     public string? TensorboardUrl => _tensorboardPort.HasValue ? $"http://localhost:{_tensorboardPort.Value}" : null;
@@ -47,6 +54,10 @@ internal sealed class TrainingSessionRunner
         using var process = CreateProcess();
         using var tensorboardProcess = _options.LaunchTensorBoard && !_reuseExistingTensorboard ? CreateTensorBoardProcess() : null;
         WriteLine($"Writing training artifacts to '{_options.ResultsDirectory}'.");
+        if (!string.IsNullOrWhiteSpace(_basePortMessage))
+        {
+            WriteLine(_basePortMessage);
+        }
         WriteLine();
         WriteLine("Starting training session with command:");
         WriteLine(FormatCommand(process.StartInfo));
@@ -167,6 +178,50 @@ internal sealed class TrainingSessionRunner
         }
     }
 
+    private int ResolveBasePort(out string? message)
+    {
+        message = null;
+        var requested = _options.BasePort ?? DefaultBasePort;
+        var candidate = requested;
+
+        for (var attempt = 0; attempt < MaxBasePortProbes; attempt++)
+        {
+            if (IsPortRangeFree(candidate))
+            {
+                if (_options.BasePort.HasValue && candidate != _options.BasePort.Value)
+                {
+                    message = $"Base port {_options.BasePort.Value} is busy; using {candidate} instead.";
+                }
+                else if (!_options.BasePort.HasValue)
+                {
+                    message = candidate == DefaultBasePort
+                        ? $"No base port specified; using default {DefaultBasePort}."
+                        : $"Auto-selected base port {candidate} (starting from {DefaultBasePort}).";
+                }
+
+                return candidate;
+            }
+
+            candidate += BasePortStride;
+        }
+
+        message = $"Could not find a free base port after probing {MaxBasePortProbes} ranges; using {requested}.";
+        return requested;
+    }
+
+    private bool IsPortRangeFree(int basePort)
+    {
+        for (var offset = 0; offset < BasePortBlockSize; offset++)
+        {
+            if (IsPortInUse(basePort + offset))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private Process CreateProcess()
     {
         var startInfo = new ProcessStartInfo
@@ -211,10 +266,7 @@ internal sealed class TrainingSessionRunner
         arguments.Add($"--results-dir={_options.ResultsDirectory}");
         arguments.Add("--force");
 
-        if (_options.BasePort.HasValue)
-        {
-            arguments.Add($"--base-port={_options.BasePort.Value}");
-        }
+        arguments.Add($"--base-port={_basePort}");
 
         if (_options.NoGraphics)
         {

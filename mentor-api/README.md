@@ -35,7 +35,7 @@ Swagger exposes example payloads for each endpoint when you browse `http://local
 | `runId` | string | Optional custom run identifier; otherwise a timestamped ID is generated.
 | `resultsDir` | string | Directory where ML-Agents will write training artifacts. Defaults to `X:\workspace\ml-agents\results`.
 | `condaEnv` | string | Name of the Conda env that contains ML-Agents (`mlagents` by default).
-| `basePort` | int | Port offset for environment launches.
+| `basePort` | int | Port offset for environment launches; if omitted, a free block is auto-selected starting at 5005 so multiple runs can coexist.
 | `noGraphics` | bool | Mirrors `--no-graphics`.
 | `skipConda` | bool | Skip Conda activation if tooling is already on `PATH`.
 | `tensorboard` | bool | Launch TensorBoard alongside training.

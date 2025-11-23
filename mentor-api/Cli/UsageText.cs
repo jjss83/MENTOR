@@ -13,7 +13,7 @@ internal static class UsageText
         builder.AppendLine("  --run-id <id>             Optional run identifier. Default: run-<behavior>-<UTC timestamp>");
         builder.AppendLine("  --results-dir <path>      Directory to store training artifacts. Default: X:\\workspace\\ml-agents\\results");
         builder.AppendLine("  --conda-env <name>        Name of the ML-Agents Conda environment. Default: mlagents");
-        builder.AppendLine("  --base-port <port>        Base port to use when launching the environment");
+        builder.AppendLine("  --base-port <port>        Base port to use when launching the environment (auto-selects from 5005 if omitted)");
         builder.AppendLine("  --no-graphics             Launches the environment without rendering");
         builder.AppendLine("  --skip-conda              Assume the ML-Agents tooling is already on PATH");
         builder.AppendLine("  --tensorboard             Also start TensorBoard pointed at the results directory");

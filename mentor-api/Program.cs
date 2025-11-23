@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Linq;
+using System.Net.NetworkInformation;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MentorTrainingRunner;
@@ -56,7 +58,8 @@ app.MapPost("/train", (TrainingRequest request) =>
         status = "running",
         resultsDirectory = startResult.Run.ResultsDirectory,
         logPath = startResult.Run.LogPath,
-        tensorboardUrl = startResult.Run.TensorboardUrl
+        tensorboardUrl = startResult.Run.TensorboardUrl,
+        basePort = startResult.Run.BasePort
     });
 });
 
@@ -347,6 +350,10 @@ internal sealed record TrainingStartResult(bool IsStarted, TrainingRunState? Run
 
 internal sealed class TrainingRunStore
 {
+    private const int DefaultBasePort = 5005;
+    private const int BasePortBlockSize = 20;
+    private const int BasePortStride = BasePortBlockSize;
+    private const int MaxBasePortProbes = 200;
     private readonly Dictionary<string, TrainingRunState> _runs = new();
     private readonly object _syncRoot = new();
 
@@ -359,9 +366,20 @@ internal sealed class TrainingRunStore
                 return TrainingStartResult.Conflict(existing, $"Training run '{options.RunId}' is already in progress.");
             }
 
-            var state = TrainingRunState.StartNew(options);
-            _runs[options.RunId] = state;
-            return TrainingStartResult.Started(state);
+            var resolvedOptions = ResolveBasePort(options, out var portMessage);
+            if (resolvedOptions is null)
+            {
+                return new TrainingStartResult(false, null, portMessage ?? "Unable to find a free base port for training.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(portMessage))
+            {
+                Console.WriteLine($"[Train] {portMessage}");
+            }
+
+            var state = TrainingRunState.StartNew(resolvedOptions);
+            _runs[resolvedOptions.RunId] = state;
+            return new TrainingStartResult(true, state, portMessage);
         }
     }
 
@@ -429,6 +447,11 @@ internal sealed class TrainingRunStore
                 var resumed = $"Resumed unfinished training '{runId}' (previous status: {statusLabel}).";
                 messages.Add(resumed);
                 log?.Invoke(resumed);
+                if (!string.IsNullOrWhiteSpace(startResult.Message))
+                {
+                    messages.Add(startResult.Message);
+                    log?.Invoke(startResult.Message);
+                }
             }
             else
             {
@@ -463,6 +486,96 @@ internal sealed class TrainingRunStore
         catch
         {
             return null;
+        }
+    }
+
+    private TrainingOptions? ResolveBasePort(TrainingOptions options, out string? message)
+    {
+        message = null;
+        var desiredBasePort = options.BasePort ?? DefaultBasePort;
+        var activePorts = CollectActiveReservedPorts();
+        var systemPorts = GetActiveTcpPorts();
+
+        var candidate = FindAvailableBasePort(desiredBasePort, activePorts, systemPorts);
+        if (!candidate.HasValue)
+        {
+            message = $"Could not find a free base port starting at {desiredBasePort}.";
+            return null;
+        }
+
+        var requested = options.BasePort ?? desiredBasePort;
+        if (candidate.Value != requested)
+        {
+            message = $"Base port {requested} is busy; using {candidate.Value} for run '{options.RunId}'.";
+        }
+
+        return options with { BasePort = candidate.Value };
+    }
+
+    private int? FindAvailableBasePort(int desiredBasePort, HashSet<int> activePorts, HashSet<int> systemPorts)
+    {
+        var candidate = desiredBasePort;
+
+        for (var attempt = 0; attempt < MaxBasePortProbes; attempt++)
+        {
+            if (IsPortRangeFree(candidate, activePorts, systemPorts))
+            {
+                return candidate;
+            }
+
+            candidate += BasePortStride;
+        }
+
+        return null;
+    }
+
+    private static bool IsPortRangeFree(int basePort, HashSet<int> activePorts, HashSet<int> systemPorts)
+    {
+        for (var offset = 0; offset < BasePortBlockSize; offset++)
+        {
+            var port = basePort + offset;
+            if (activePorts.Contains(port) || systemPorts.Contains(port))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private HashSet<int> CollectActiveReservedPorts()
+    {
+        var reserved = new HashSet<int>();
+
+        foreach (var run in _runs.Values)
+        {
+            if (run.IsCompleted || !run.BasePort.HasValue)
+            {
+                continue;
+            }
+
+            for (var offset = 0; offset < BasePortBlockSize; offset++)
+            {
+                reserved.Add(run.BasePort.Value + offset);
+            }
+        }
+
+        return reserved;
+    }
+
+    private static HashSet<int> GetActiveTcpPorts()
+    {
+        try
+        {
+            return IPGlobalProperties
+                .GetIPGlobalProperties()
+                .GetActiveTcpListeners()
+                .Select(ep => ep.Port)
+                .ToHashSet();
+        }
+        catch
+        {
+            return new HashSet<int>();
         }
     }
 
@@ -508,14 +621,16 @@ internal sealed class TrainingRunState
     public string ResultsDirectory { get; }
     public string LogPath { get; }
     public string? TensorboardUrl { get; }
+    public int? BasePort { get; }
     public Task<TrainingRunOutcome> RunTask { get; }
 
-    private TrainingRunState(string runId, string resultsDirectory, string logPath, string? tensorboardUrl, Task<TrainingRunOutcome> runTask)
+    private TrainingRunState(string runId, string resultsDirectory, string logPath, string? tensorboardUrl, int? basePort, Task<TrainingRunOutcome> runTask)
     {
         RunId = runId;
         ResultsDirectory = resultsDirectory;
         LogPath = logPath;
         TensorboardUrl = tensorboardUrl;
+        BasePort = basePort;
         RunTask = runTask;
     }
 
@@ -559,7 +674,7 @@ internal sealed class TrainingRunState
             }
         });
 
-        return new TrainingRunState(options.RunId, options.ResultsDirectory, logPath, options.LaunchTensorBoard ? "http://localhost:6006" : null, runTask);
+        return new TrainingRunState(options.RunId, options.ResultsDirectory, logPath, options.LaunchTensorBoard ? "http://localhost:6006" : null, options.BasePort, runTask);
     }
 
     public bool IsCompleted => RunTask.IsCompleted;
