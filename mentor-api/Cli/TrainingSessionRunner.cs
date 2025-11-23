@@ -188,6 +188,7 @@ internal sealed class TrainingSessionRunner
         {
             startInfo.FileName = ResolveCondaExecutable();
             startInfo.ArgumentList.Add("run");
+            startInfo.ArgumentList.Add("--live-stream");
             startInfo.ArgumentList.Add("-n");
             startInfo.ArgumentList.Add(_options.CondaEnvironmentName);
             startInfo.ArgumentList.Add("mlagents-learn");
@@ -241,6 +242,7 @@ internal sealed class TrainingSessionRunner
         {
             startInfo.FileName = ResolveCondaExecutable();
             startInfo.ArgumentList.Add("run");
+            startInfo.ArgumentList.Add("--live-stream");
             startInfo.ArgumentList.Add("-n");
             startInfo.ArgumentList.Add(_options.CondaEnvironmentName);
             startInfo.ArgumentList.Add("tensorboard");
