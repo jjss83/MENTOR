@@ -1,7 +1,0 @@
-X:\workspace\MENTOR\mentor-py-api\.venv\Lib\site-packages\pydantic\_internal\_config.py:383: UserWarning: Valid config keys have changed in V2:
-* 'allow_population_by_field_name' has been renamed to 'validate_by_name'
-  warnings.warn(message, UserWarning)
-INFO:     Started server process [8676]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:5113 (Press CTRL+C to quit)
