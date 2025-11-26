@@ -37,103 +37,103 @@ internal sealed record TrainingOptions(
             switch (key)
             {
                 case "env-path":
-                {
-                    if (!TryReadValue(args, ref i, "env-path", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "env-path", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    builder.EnvExecutablePath = NormalizeFile(value, "environment executable", ref error);
-                    if (builder.EnvExecutablePath is null)
-                    {
-                        return false;
-                    }
+                        builder.EnvExecutablePath = NormalizeFile(value, "environment executable", ref error);
+                        if (builder.EnvExecutablePath is null)
+                        {
+                            return false;
+                        }
 
-                    break;
-                }
+                        break;
+                    }
 
                 case "config":
-                {
-                    if (!TryReadValue(args, ref i, "config", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "config", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    builder.TrainerConfigPath = NormalizeFile(value, "trainer config", ref error);
-                    if (builder.TrainerConfigPath is null)
-                    {
-                        return false;
-                    }
+                        builder.TrainerConfigPath = NormalizeFile(value, "trainer config", ref error);
+                        if (builder.TrainerConfigPath is null)
+                        {
+                            return false;
+                        }
 
-                    break;
-                }
+                        break;
+                    }
 
                 case "run-id":
-                {
-                    if (!TryReadValue(args, ref i, "run-id", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "run-id", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    if (string.IsNullOrWhiteSpace(value))
-                    {
-                        error = "--run-id must not be empty.";
-                        return false;
-                    }
+                        if (string.IsNullOrWhiteSpace(value))
+                        {
+                            error = "--run-id must not be empty.";
+                            return false;
+                        }
 
-                    builder.RunId = value.Trim();
-                    break;
-                }
+                        builder.RunId = value.Trim();
+                        break;
+                    }
 
                 case "results-dir":
-                {
-                    if (!TryReadValue(args, ref i, "results-dir", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "results-dir", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    builder.ResultsDirectory = NormalizeDirectory(value, ref error);
-                    if (builder.ResultsDirectory is null)
-                    {
-                        return false;
-                    }
+                        builder.ResultsDirectory = NormalizeDirectory(value, ref error);
+                        if (builder.ResultsDirectory is null)
+                        {
+                            return false;
+                        }
 
-                    break;
-                }
+                        break;
+                    }
 
                 case "conda-env":
-                {
-                    if (!TryReadValue(args, ref i, "conda-env", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "conda-env", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    builder.CondaEnvironmentName = value.Trim();
-                    if (builder.CondaEnvironmentName.Length == 0)
-                    {
-                        error = "--conda-env must not be empty.";
-                        return false;
-                    }
+                        builder.CondaEnvironmentName = value.Trim();
+                        if (builder.CondaEnvironmentName.Length == 0)
+                        {
+                            error = "--conda-env must not be empty.";
+                            return false;
+                        }
 
-                    break;
-                }
+                        break;
+                    }
 
                 case "base-port":
-                {
-                    if (!TryReadValue(args, ref i, "base-port", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "base-port", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) || port <= 0)
-                    {
-                        error = "--base-port must be a positive integer.";
-                        return false;
-                    }
+                        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) || port <= 0)
+                        {
+                            error = "--base-port must be a positive integer.";
+                            return false;
+                        }
 
-                    builder.BasePort = port;
-                    break;
-                }
+                        builder.BasePort = port;
+                        break;
+                    }
 
                 case "no-graphics":
                     builder.NoGraphics = true;

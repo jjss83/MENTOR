@@ -27,37 +27,37 @@ internal sealed record ReportOptions(
             switch (key)
             {
                 case "run-id":
-                {
-                    if (!TryReadValue(args, ref i, "run-id", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "run-id", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    if (string.IsNullOrWhiteSpace(value))
-                    {
-                        error = "--run-id must not be empty.";
-                        return false;
-                    }
+                        if (string.IsNullOrWhiteSpace(value))
+                        {
+                            error = "--run-id must not be empty.";
+                            return false;
+                        }
 
-                    runId = value.Trim();
-                    break;
-                }
+                        runId = value.Trim();
+                        break;
+                    }
 
                 case "results-dir":
-                {
-                    if (!TryReadValue(args, ref i, "results-dir", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "results-dir", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    resultsDirectory = NormalizeDirectory(value, ref error);
-                    if (resultsDirectory is null)
-                    {
-                        return false;
-                    }
+                        resultsDirectory = NormalizeDirectory(value, ref error);
+                        if (resultsDirectory is null)
+                        {
+                            return false;
+                        }
 
-                    break;
-                }
+                        break;
+                    }
 
                 default:
                     error = $"Unknown option '--{key}'.";

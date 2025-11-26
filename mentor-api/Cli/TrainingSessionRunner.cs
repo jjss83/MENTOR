@@ -300,17 +300,17 @@ internal sealed class TrainingSessionRunner
             startInfo.ArgumentList.Add("tensorboard");
         }
 
-        startInfo.ArgumentList.Add("--logdir" );
+        startInfo.ArgumentList.Add("--logdir");
         startInfo.ArgumentList.Add(_options.ResultsDirectory);
 
         if (_tensorboardPort.HasValue)
         {
-            startInfo.ArgumentList.Add("--port" );
+            startInfo.ArgumentList.Add("--port");
             startInfo.ArgumentList.Add(_tensorboardPort.Value.ToString(CultureInfo.InvariantCulture));
         }
 
-        startInfo.ArgumentList.Add("--host" );
-        startInfo.ArgumentList.Add("localhost" );
+        startInfo.ArgumentList.Add("--host");
+        startInfo.ArgumentList.Add("localhost");
 
         return new Process { StartInfo = startInfo };
     }

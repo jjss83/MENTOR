@@ -1,0 +1,53 @@
+{
+  "id": "shhhunt-reach-target-obstacle",
+  "name": "ShhhuntReachTargetObstacle",
+  "setup": "Obstacle-rich arena where a ThirdPersonController-based agent must sprint and jump across scattered geometry to reach a randomly placed target that can sit on ground or obstacle tops.",
+  "goal": "Learn routes that leverage sprint bursts and deliberate jumps to touch the target quickly without falling or colliding excessively with obstacles.",
+  "agents": {
+    "count": 1,
+    "description": "Single humanoid agent using ThirdPersonControllerAdapter locomotion. Additional clones can share the policy for throughput scaling."
+  },
+  "agent_reward_function": {
+    "terms": [
+      "+1.0 when the agent enters the targetReachedThreshold radius around the target (success).",
+      "Dense shaping each step: distance delta * distanceRewardScale encourages steady progress.",
+      "timePenalty (negative) every step to favor faster solutions.",
+      "+successfulJumpReward (0.05) when a grounded jump successfully lifts off.",
+      "invalidJumpPenalty when requesting jumps while airborne or during cooldown.",
+      "obstacleCollisionPenalty whenever the CharacterController collides with tagged obstacles.",
+      "-1.0 if distance exceeds maxDistanceFromTarget or the agent falls below fallThreshold (failure)."
+    ]
+  },
+  "behavior_parameters": {
+    "vector_observation_space": "15 float observations: normalized target offset (3), normalized velocity (3), sin(yaw) (1), normalized scalar distance (1), local target dir X/Z (2), grounded flag (1), normalized vertical velocity (1), normalized jump cooldown (1), flags for target-on-obstacle and sprinting (2). Add RayPerceptionSensorComponent3D entries detecting Obstacle/Ground/Target tags for spatial awareness.",
+    "actions": "5 continuous actions mapped to the ThirdPersonControllerAdapter: forward/back, left/right, reserved slot, sprint/run signal, jump request (thresholded).",
+    "visual_observations": "Not required; perception relies on vector observations plus ray sensors recommended in the script's checklist."
+  },
+  "float_properties": [
+    {"name": "targetReachedThreshold", "description": "Distance threshold counted as reaching the target.", "default": 1.25},
+    {"name": "fallThreshold", "description": "Y level treated as falling off the arena.", "default": -5.0},
+    {"name": "maxDistanceFromTarget", "description": "Max distance allowed before failure.", "default": 100.0},
+    {"name": "maxDistance", "description": "Normalization range for relative position and scalar distance.", "default": 50.0},
+    {"name": "maxSpeed", "description": "Horizontal speed used to normalize velocity observations.", "default": 5.335},
+    {"name": "verticalVelocityNormalization", "description": "Magnitude cap for vertical velocity normalization.", "default": 10.0},
+    {"name": "distanceRewardScale", "description": "Scale for distance-based shaping reward.", "default": 0.01},
+    {"name": "timePenalty", "description": "Negative per-step penalty encouraging efficiency.", "default": -0.00015},
+    {"name": "successfulJumpReward", "description": "Reward when a grounded jump successfully lifts off.", "default": 0.05},
+    {"name": "invalidJumpPenalty", "description": "Penalty for invalid jump requests (airborne/cooldown).", "default": -0.02},
+    {"name": "obstacleCollisionPenalty", "description": "Penalty applied on obstacle collisions.", "default": -0.1},
+    {"name": "targetOnObstacleYOffset", "description": "Height offset when target spawns on an obstacle.", "default": 0.15},
+    {"name": "targetGroundYOffset", "description": "Height offset when target spawns on flat ground.", "default": 0.5},
+    {"name": "spawnAreaSizeX", "description": "Width of the spawn area along X.", "default": 20.0},
+    {"name": "spawnAreaSizeZ", "description": "Width of the spawn area along Z.", "default": 20.0},
+    {"name": "spawnRetries", "description": "Attempts to find a non-overlapping spawn point.", "default": 10.0},
+    {"name": "spawnClearanceRadius", "description": "Radius checked to avoid spawning inside obstacles.", "default": 0.75},
+    {"name": "agentSpawnYOffset", "description": "Extra height applied to agent spawn positions.", "default": 0.5},
+    {"name": "sprintActionThreshold", "description": "Action magnitude required to toggle sprint.", "default": 0.5},
+    {"name": "jumpActionThreshold", "description": "Action magnitude required to request a jump.", "default": 0.5},
+    {"name": "jumpCooldownSeconds", "description": "Cooldown between successful jumps.", "default": 0.75}
+  ],
+  "benchmark_mean_reward": null,
+  "scene_path_hint": "Project/Assets/ML-Agents/Examples/ShhhuntReachTarget/ShhhuntReachTargetObstacles.unity",
+  "agent_script_file": "MLReachTargetObstacleAgent.cs",
+  "trainer_config_file": "ShhhuntReachTargetObstacle.yaml"
+}

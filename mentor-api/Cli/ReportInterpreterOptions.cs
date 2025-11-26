@@ -37,80 +37,80 @@ internal sealed record ReportInterpreterOptions(
             switch (key)
             {
                 case "run-id":
-                {
-                    if (!TryReadValue(args, ref i, "run-id", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "run-id", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    if (string.IsNullOrWhiteSpace(value))
-                    {
-                        error = "--run-id must not be empty.";
-                        return false;
-                    }
+                        if (string.IsNullOrWhiteSpace(value))
+                        {
+                            error = "--run-id must not be empty.";
+                            return false;
+                        }
 
-                    runId = value.Trim();
-                    break;
-                }
+                        runId = value.Trim();
+                        break;
+                    }
 
                 case "results-dir":
-                {
-                    if (!TryReadValue(args, ref i, "results-dir", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "results-dir", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    resultsDirectory = NormalizeDirectory(value, ref error);
-                    if (resultsDirectory is null)
-                    {
-                        return false;
-                    }
+                        resultsDirectory = NormalizeDirectory(value, ref error);
+                        if (resultsDirectory is null)
+                        {
+                            return false;
+                        }
 
-                    break;
-                }
+                        break;
+                    }
 
                 case "prompt":
-                {
-                    if (!TryReadValue(args, ref i, "prompt", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "prompt", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    if (!string.IsNullOrWhiteSpace(value))
-                    {
-                        prompt = value.Trim();
-                    }
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            prompt = value.Trim();
+                        }
 
-                    break;
-                }
+                        break;
+                    }
 
                 case "openai-model":
-                {
-                    if (!TryReadValue(args, ref i, "openai-model", out var value, out error))
                     {
-                        return false;
-                    }
+                        if (!TryReadValue(args, ref i, "openai-model", out var value, out error))
+                        {
+                            return false;
+                        }
 
-                    model = value.Trim();
-                    break;
-                }
+                        model = value.Trim();
+                        break;
+                    }
 
                 case "openai-api-key":
-                {
-                    if (!TryReadValue(args, ref i, "openai-api-key", out var value, out error))
                     {
-                        return false;
+                        if (!TryReadValue(args, ref i, "openai-api-key", out var value, out error))
+                        {
+                            return false;
+                        }
+
+                        apiKey = value.Trim();
+                        break;
                     }
 
-                    apiKey = value.Trim();
-                    break;
-                }
-
                 case "check-openai":
-                {
-                    checkOpenAi = true;
-                    break;
-                }
+                    {
+                        checkOpenAi = true;
+                        break;
+                    }
 
                 default:
                     error = $"Unknown option '--{key}'.";
