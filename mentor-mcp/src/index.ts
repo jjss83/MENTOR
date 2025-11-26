@@ -11,8 +11,9 @@ const server = new McpServer({
 });
 
 const trainingSchema = z.object({
-  envPath: z.string(),
-  config: z.string(),
+  envPath: z.string().optional(),
+  config: z.string().optional(),
+  runId: z.string().optional(),
   resultsDir: z.string().optional(),
   condaEnv: z.string().optional(),
   basePort: z.number().int().optional(),
