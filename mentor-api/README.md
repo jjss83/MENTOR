@@ -4,7 +4,7 @@ This minimal ASP.NET Core service exposes HTTP endpoints that wrap the Mentor tr
 
 ## Prerequisites
 - .NET 9 SDK (matches the `net9.0` target of `MentorApi.csproj`).
-- Unity environment executables that were exported with ML-Agents enabled.
+- Unity environment executables exported with ML-Agents enabled, or plan to press Play in the Unity Editor (omit `envPath` for that flow).
 - A configured ML-Agents Python environment (typically via Conda) available on the machine.
 
 ## Run Locally
@@ -30,15 +30,15 @@ Swagger exposes example payloads for each endpoint when you browse `http://local
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `envPath` | string | Full path to your Unity environment executable (`.exe`). Optional if the API should reuse what is stored in `run_metadata.json` when resuming.
-| `config` | string | Path to the ML-Agents trainer YAML file. Defaults to `config/ppo/3DBall.yaml`.
-| `runId` | string | Optional custom run identifier; otherwise a timestamped ID is generated.
-| `resultsDir` | string | Directory where ML-Agents will write training artifacts. Defaults to `X:\workspace\ml-agents\results`.
-| `condaEnv` | string | Name of the Conda env that contains ML-Agents (`mlagents` by default).
-| `basePort` | int | Port offset for environment launches; if omitted, a free block is auto-selected starting at 5005 so multiple runs can coexist.
-| `noGraphics` | bool | Mirrors `--no-graphics`.
-| `skipConda` | bool | Skip Conda activation if tooling is already on `PATH`.
-| `tensorboard` | bool | Launch TensorBoard alongside training.
+| `envPath` | string | Full path to your Unity environment executable (`.exe`). Optional when you'll launch the Unity Editor yourself or when resuming with a stored path. |
+| `config` | string | Path to the ML-Agents trainer YAML file. Defaults to `config/ppo/3DBall.yaml`. |
+| `runId` | string | Optional custom run identifier; otherwise a timestamped ID is generated. |
+| `resultsDir` | string | Directory where ML-Agents will write training artifacts. Defaults to `X:\workspace\ml-agents\results`. |
+| `condaEnv` | string | Name of the Conda env that contains ML-Agents (`mlagents` by default). |
+| `basePort` | int | Port offset for environment launches; if omitted, a free block is auto-selected starting at 5005 so multiple runs can coexist. |
+| `noGraphics` | bool | Mirrors `--no-graphics`. |
+| `skipConda` | bool | Skip Conda activation if tooling is already on `PATH`. |
+| `tensorboard` | bool | Launch TensorBoard alongside training. |
 
 ### cURL example
 ```bash
@@ -51,9 +51,10 @@ curl -X POST http://localhost:5113/train \
         "config": "X:/workspace/MENTOR/mlagents-example-profiles/ShhhuntReachTarget/ShhhuntReachTarget.yaml"
       }'
 ```
+To train against the Unity Editor instead of a built executable, drop `envPath`, start `/train`, and press Play in the Editor when ML-Agents waits for the connection.
 
 ### Sample payloads
-Two ready-to-use payloads for common scenarios:
+Three ready-to-use payloads for common scenarios:
 ```json
 {
   "noGraphics": true,
@@ -68,6 +69,12 @@ Two ready-to-use payloads for common scenarios:
   "tensorboard": true,
   "envPath": "X:/workspace/ml-agents/Project/Build/UnityEnvironment.exe",
   "config": "X:/workspace/MENTOR/mlagents-example-profiles/3DBall/3DBall.yaml"
+}
+```
+```json
+{
+  "config": "X:/workspace/MENTOR/mlagents-example-profiles/ShhhuntReachTargetObstacle/ShhhuntReachTargetObstacle.yaml",
+  "runId": "run-shhhunt-editor"
 }
 ```
 

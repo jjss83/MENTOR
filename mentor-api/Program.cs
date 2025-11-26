@@ -363,12 +363,15 @@ internal sealed class TrainingRunStore
                 log?.Invoke(skipped);
                 continue;
             }
-            if (string.IsNullOrWhiteSpace(metadata.EnvPath) || !File.Exists(metadata.EnvPath) || !string.Equals(Path.GetExtension(metadata.EnvPath), ".exe", StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(metadata.EnvPath))
             {
-                var skipped = $"Skipped '{runId}' because envPath is missing or not a valid .exe ({metadata.EnvPath ?? "<null>"}).";
-                messages.Add(skipped);
-                log?.Invoke(skipped);
-                continue;
+                if (!File.Exists(metadata.EnvPath) || !string.Equals(Path.GetExtension(metadata.EnvPath), ".exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    var skipped = $"Skipped '{runId}' because envPath is missing or not a valid .exe ({metadata.EnvPath ?? "<null>"}).";
+                    messages.Add(skipped);
+                    log?.Invoke(skipped);
+                    continue;
+                }
             }
             var startResult = TryStart(metadata.ToOptions());
             var statusLabel = string.IsNullOrWhiteSpace(status) ? "unknown" : status!.ToLowerInvariant();
@@ -377,6 +380,12 @@ internal sealed class TrainingRunStore
                 var resumed = $"Resumed unfinished training '{runId}' (previous status: {statusLabel}).";
                 messages.Add(resumed);
                 log?.Invoke(resumed);
+                if (string.IsNullOrWhiteSpace(metadata.EnvPath))
+                {
+                    var manual = $"Run '{runId}' is resuming without envPath; start the Unity Editor or environment manually.";
+                    messages.Add(manual);
+                    log?.Invoke(manual);
+                }
                 if (!string.IsNullOrWhiteSpace(startResult.Message))
                 {
                     messages.Add(startResult.Message);

@@ -8,8 +8,9 @@ internal static class UsageText
     {
         var builder = new StringBuilder();
         builder.AppendLine("Usage:");
-        builder.AppendLine("  dotnet run -- --env-path <path-to-env-exe> --config <trainer-config.yaml> [options]\\n");
+        builder.AppendLine("  dotnet run -- --config <trainer-config.yaml> [--env-path <path-to-env-exe>] [options]\\n");
         builder.AppendLine("Options:");
+        builder.AppendLine("  --env-path <path>       Optional Unity environment executable (.exe); omit when using the Unity Editor Play mode");
         builder.AppendLine("  --run-id <id>             Optional run identifier. Default: run-<behavior>-<UTC timestamp>");
         builder.AppendLine("  --results-dir <path>      Directory to store training artifacts. Default: X:\\workspace\\ml-agents\\results");
         builder.AppendLine("  --conda-env <name>        Name of the ML-Agents Conda environment. Default: mlagents");
