@@ -12,7 +12,7 @@ internal static class UsageText
         builder.AppendLine("Options:");
         builder.AppendLine("  --env-path <path>       Optional Unity environment executable (.exe); omit when using the Unity Editor Play mode");
         builder.AppendLine("  --run-id <id>             Optional run identifier. Default: run-<behavior>-<UTC timestamp>");
-        builder.AppendLine("  --results-dir <path>      Directory to store training artifacts. Default: X:\\workspace\\ml-agents\\results");
+        builder.AppendLine("  --results-dir <path>      Directory to store training artifacts. Default: X:\\\\workspace\\\\MENTOR\\\\ml-agents-training-results");
         builder.AppendLine("  --conda-env <name>        Name of the ML-Agents Conda environment. Default: mlagents");
         builder.AppendLine("  --base-port <port>        Base port to use when launching the environment (auto-selects from 5005 if omitted)");
         builder.AppendLine("  --no-graphics             Launches the environment without rendering");
@@ -34,7 +34,7 @@ internal static class UsageText
         builder.AppendLine("  dotnet run -- report --run-id <id> [--results-dir <path>]\\n");
         builder.AppendLine("Options:");
         builder.AppendLine("  --run-id <id>        Run identifier to inspect (required)");
-        builder.AppendLine("  --results-dir <path> Directory that contains run artifacts. Default: X:\\workspace\\ml-agents\\results");
+        builder.AppendLine("  --results-dir <path> Directory that contains run artifacts. Default: X:\\\\workspace\\\\MENTOR\\\\ml-agents-training-results");
         return builder.ToString();
     }
 
@@ -45,7 +45,7 @@ internal static class UsageText
         builder.AppendLine("  dotnet run -- report-interpreter --run-id <id> [--results-dir <path>] [--prompt <text>] [--openai-model <model>] [--openai-api-key <key>] [--check-openai]\\n");
         builder.AppendLine("Options:");
         builder.AppendLine("  --run-id <id>        Run identifier to inspect (required)");
-        builder.AppendLine("  --results-dir <path> Directory that contains run artifacts. Default: X:\\workspace\\ml-agents\\results");
+        builder.AppendLine("  --results-dir <path> Directory that contains run artifacts. Default: X:\\\\workspace\\\\MENTOR\\\\ml-agents-training-results");
         builder.AppendLine("  --prompt <text>      Prompt to send along with the report. Default: Explain current results");
         builder.AppendLine("  --openai-model <m>   OpenAI chat completion model. Default: gpt-4o-mini");
         builder.AppendLine("  --openai-api-key <k> Explicit API key (otherwise uses OPENAI_API_KEY env var)");

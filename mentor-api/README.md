@@ -12,7 +12,7 @@ This minimal ASP.NET Core service exposes HTTP endpoints that wrap the Mentor tr
 cd mentor-api
  dotnet run
 ```
-This launches Kestrel on `http://localhost:5113` with Swagger UI enabled in `Development` mode. When the API starts it attempts to resume any unfinished training runs it finds under the default results directory (`X:/workspace/ml-agents/results`).
+This launches Kestrel on `http://localhost:5113` with Swagger UI enabled in `Development` mode. When the API starts it attempts to resume any unfinished training runs it finds under the default results directory (`X:/workspace/MENTOR/ml-agents-training-results`).
 
 ### Run with hot reload (dotnet watch)
 Use `dotnet watch` during development to rebuild and restart the API when files change:
@@ -42,7 +42,7 @@ Swagger exposes example payloads for each endpoint when you browse `http://local
 | `envPath` | string | Full path to your Unity environment executable (`.exe`). Optional when you'll launch the Unity Editor yourself or when resuming with a stored path. |
 | `config` | string | Path to the ML-Agents trainer YAML file. Defaults to `config/ppo/3DBall.yaml`. |
 | `runId` | string | Optional custom run identifier; otherwise a timestamped ID is generated. |
-| `resultsDir` | string | Directory where ML-Agents will write training artifacts. Defaults to `X:/workspace/ml-agents/results`. |
+| `resultsDir` | string | Directory where ML-Agents will write training artifacts. Defaults to `X:/workspace/MENTOR/ml-agents-training-results`. |
 | `condaEnv` | string | Name of the Conda env that contains ML-Agents (`mlagents` by default). |
 | `basePort` | int | Port offset for environment launches; if omitted, a free block is auto-selected starting at 5005 so multiple runs can coexist. |
 | `noGraphics` | bool | Mirrors `--no-graphics`. |
@@ -92,7 +92,7 @@ Request body:
 ```json
 {
   "runId": "run-3DBall-2024-08-10-153000",
-  "resultsDir": "X:/workspace/ml-agents/results"
+  "resultsDir": "X:/workspace/MENTOR/ml-agents-training-results"
 }
 ```
 Example response:
@@ -102,8 +102,8 @@ Example response:
   "status": "running",
   "completed": false,
   "exitCode": null,
-  "resultsDirectory": "X:/workspace/ml-agents/results",
-  "trainingStatusPath": "X:/workspace/ml-agents/results/run-3DBall-2024-08-10-153000/run_logs/training_status.json",
+  "resultsDirectory": "X:/workspace/MENTOR/ml-agents-training-results",
+  "trainingStatusPath": "X:/workspace/MENTOR/ml-agents-training-results/run-3DBall-2024-08-10-153000/run_logs/training_status.json",
   "message": null,
   "tensorboardUrl": "http://localhost:6006"
 }
@@ -117,7 +117,7 @@ Typical request:
 ```json
 {
   "runId": "run-3DBall-2024-08-10-153000",
-  "resultsDir": "X:/workspace/ml-agents/results",
+  "resultsDir": "X:/workspace/MENTOR/ml-agents-training-results",
   "prompt": "Highlight any regressions",
   "openAiModel": "gpt-4o-mini",
   "checkOpenAi": false
@@ -129,3 +129,4 @@ Typical request:
 - Conflicts (`409`) indicate a `runId` is already active; query `/train-status` or choose a new identifier.
 - Inspect `mentor-api.log` within the run folder to see the raw CLI output emitted by `TrainingSessionRunner`.
 - If TensorBoard was requested, open `http://localhost:6006` after training starts.
+

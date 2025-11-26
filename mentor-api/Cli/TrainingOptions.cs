@@ -14,7 +14,7 @@ internal sealed record TrainingOptions(
     bool SkipConda,
     bool LaunchTensorBoard)
 {
-    internal const string DefaultResultsDirectory = @"X:\\workspace\\ml-agents\\results";
+    internal const string DefaultResultsDirectory = @"X:\workspace\MENTOR\ml-agents-training-results";
     private const string DefaultCondaEnvironmentName = "mlagents";
 
     public static bool TryParse(string[] args, out TrainingOptions? options, out string? error)
@@ -370,3 +370,4 @@ internal sealed record TrainingOptions(
         public bool LaunchTensorBoard { get; set; }
     }
 }
+

@@ -3,17 +3,6 @@
     "python-envs.defaultPackageManager": "ms-python.python:conda",
     "python-envs.pythonProjects": [],
     "workbench.colorCustomizations": {
-        "titleBar.activeBackground": "#f2d675",
-        "titleBar.activeForeground": "#3b2f00",
-        "titleBar.inactiveBackground": "#d9c163",
-        "titleBar.inactiveForeground": "#4a3c00",
-        "activityBar.background": "#c9a738",
-        "activityBar.foreground": "#352800",
-        "activityBar.inactiveForeground": "#5c4a00",
-        "statusBar.background": "#b98c19",
-        "statusBar.foreground": "#2b2200",
-        "statusBar.debuggingBackground": "#f4c542",
-        "statusBar.debuggingForeground": "#3a2f00",
         "statusBar.noFolderBackground": "#b98c19",
         "editorInlayHint.background": "#fff3cc",
         "editorInlayHint.foreground": "#4f3f00"
