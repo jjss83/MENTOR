@@ -23,4 +23,3 @@ behaviors:
         strength: 1.0
     keep_checkpoints: 5
     checkpoint_interval: 50000
-    threaded: true
