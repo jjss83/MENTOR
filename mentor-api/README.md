@@ -12,7 +12,16 @@ This minimal ASP.NET Core service exposes HTTP endpoints that wrap the Mentor tr
 cd mentor-api
  dotnet run
 ```
-This launches Kestrel on `http://localhost:5113` with Swagger UI enabled in `Development` mode. When the API starts it attempts to resume any unfinished training runs it finds under the default results directory (`X:\workspace\ml-agents\results`).
+This launches Kestrel on `http://localhost:5113` with Swagger UI enabled in `Development` mode. When the API starts it attempts to resume any unfinished training runs it finds under the default results directory (`X:/workspace/ml-agents/results`).
+
+### Run with hot reload (dotnet watch)
+Use `dotnet watch` during development to rebuild and restart the API when files change:
+
+```bash
+dotnet watch --project mentor-api run
+```
+
+The watcher restarts on saves; stop it with Ctrl+C.
 
 ## HTTP Endpoints
 | Method | Route | Description |
@@ -33,7 +42,7 @@ Swagger exposes example payloads for each endpoint when you browse `http://local
 | `envPath` | string | Full path to your Unity environment executable (`.exe`). Optional when you'll launch the Unity Editor yourself or when resuming with a stored path. |
 | `config` | string | Path to the ML-Agents trainer YAML file. Defaults to `config/ppo/3DBall.yaml`. |
 | `runId` | string | Optional custom run identifier; otherwise a timestamped ID is generated. |
-| `resultsDir` | string | Directory where ML-Agents will write training artifacts. Defaults to `X:\workspace\ml-agents\results`. |
+| `resultsDir` | string | Directory where ML-Agents will write training artifacts. Defaults to `X:/workspace/ml-agents/results`. |
 | `condaEnv` | string | Name of the Conda env that contains ML-Agents (`mlagents` by default). |
 | `basePort` | int | Port offset for environment launches; if omitted, a free block is auto-selected starting at 5005 so multiple runs can coexist. |
 | `noGraphics` | bool | Mirrors `--no-graphics`. |
