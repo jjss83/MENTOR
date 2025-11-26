@@ -99,51 +99,6 @@ app.MapPost("/report", async (ReportRequest request) =>
     }
 });
 
-app.MapPost("/report-interpreter", async (ReportInterpreterRequest request) =>
-{
-    if (string.IsNullOrWhiteSpace(request.RunId))
-    {
-        return Results.BadRequest(new { error = "runId is required.", usage = UsageText.GetReportInterpreterUsage() });
-    }
-
-    var cliArgs = CliArgs.FromReportInterpreter(request).ToArray();
-    if (!ReportInterpreterOptions.TryParse(cliArgs, out var options, out var error) || options is null)
-    {
-        return Results.BadRequest(new { error = error ?? "Invalid interpreter options.", usage = UsageText.GetReportInterpreterUsage() });
-    }
-
-    using var output = new StringWriter();
-    using var errors = new StringWriter();
-    var runner = new ReportInterpreterRunner(options, output, errors);
-    var exitCode = await runner.RunAsync();
-
-    var errorText = errors.ToString();
-    if (!string.IsNullOrWhiteSpace(errorText))
-    {
-        return Results.BadRequest(new { error = errorText.Trim(), usage = UsageText.GetReportInterpreterUsage(), exitCode });
-    }
-
-    var payloadText = output.ToString();
-    JsonNode? payload = null;
-    try
-    {
-        payload = JsonNode.Parse(payloadText);
-    }
-    catch
-    {
-        // If parsing fails, return raw content.
-    }
-
-    if (exitCode != 0)
-    {
-        return Results.BadRequest(new { error = "report-interpreter failed", output = payloadText, exitCode });
-    }
-
-    return payload is not null
-        ? Results.Json(payload, new JsonSerializerOptions { WriteIndented = true })
-        : Results.Text(payloadText, "application/json");
-});
-
 app.Run();
 
 internal static class CliArgs
@@ -213,37 +168,6 @@ internal static class CliArgs
         return args;
     }
 
-    public static List<string> FromReportInterpreter(ReportInterpreterRequest request)
-    {
-        var args = new List<string> { "--run-id", request.RunId! };
-
-        if (!string.IsNullOrWhiteSpace(request.ResultsDir))
-        {
-            args.AddRange(new[] { "--results-dir", request.ResultsDir! });
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.Prompt))
-        {
-            args.AddRange(new[] { "--prompt", request.Prompt! });
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.OpenAiModel))
-        {
-            args.AddRange(new[] { "--openai-model", request.OpenAiModel! });
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.OpenAiApiKey))
-        {
-            args.AddRange(new[] { "--openai-api-key", request.OpenAiApiKey! });
-        }
-
-        if (request.CheckOpenAi == true)
-        {
-            args.Add("--check-openai");
-        }
-
-        return args;
-    }
 }
 
 internal sealed record TrainingRequest(
@@ -260,14 +184,6 @@ internal sealed record TrainingRequest(
 internal sealed record TrainingStatusRequest(string? ResultsDir, string? RunId = null);
 
 internal sealed record ReportRequest(string? ResultsDir, string? RunId = null);
-
-internal sealed record ReportInterpreterRequest(
-    string? ResultsDir,
-    string? Prompt,
-    string? OpenAiModel,
-    string? OpenAiApiKey,
-    bool? CheckOpenAi,
-    string? RunId = null);
 
 internal sealed record TrainingStatusPayload(
     string RunId,
