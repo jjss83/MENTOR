@@ -21,7 +21,6 @@ This launches Kestrel on `http://localhost:5113` with Swagger UI enabled in `Dev
 | `POST` | `/train` | Starts a new ML-Agents training job via the CLI runner. |
 | `POST` | `/train-status` | Returns the latest known status for a given `runId`. |
 | `POST` | `/report` | Generates a JSON summary for a completed run. |
-| `POST` | `/report-interpreter` | Runs the report interpreter pipeline (optionally calling OpenAI) for richer insights. |
 
 Swagger exposes example payloads for each endpoint when you browse `http://localhost:5113/swagger`.
 
@@ -95,16 +94,13 @@ Example response:
 
 ## Generate Reports
 - `/report` reuses the CLI `report` command to produce a JSON summary document. Use it after training has finished.
-- `/report-interpreter` feeds the report through the interpreter pipeline. Provide `prompt`, `openAiModel`, `openAiApiKey`, or `checkOpenAi` if you need to route through OpenAI yourself.
+- The report interpreter pipeline is available only via the CLI (the `/report-interpreter` HTTP endpoint has been removed). Run `dotnet run -- report-interpreter --run-id <id> [--results-dir <path>] [--prompt "Explain current results"] [--openai-model <model>] [--openai-api-key <key>] [--check-openai]` if you need the richer interpreter output.
 
-Typical request:
+Example `/report` request:
 ```json
 {
   "runId": "run-3DBall-2024-08-10-153000",
-  "resultsDir": "X:/workspace/ml-agents/results",
-  "prompt": "Highlight any regressions",
-  "openAiModel": "gpt-4o-mini",
-  "checkOpenAi": false
+  "resultsDir": "X:/workspace/ml-agents/results"
 }
 ```
 
