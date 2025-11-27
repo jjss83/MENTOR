@@ -1,0 +1,110 @@
+Writing training artifacts to 'X:\workspace\MENTOR\ml-agents-training-results'.
+
+Starting training session with command:
+C:\Users\juanj\anaconda3\Scripts\conda.exe run --live-stream -n mlagents mlagents-learn X:\workspace\MENTOR\mlagents-example-profiles\ShhhuntReachTarget\ShhhuntReachTarget.yaml --run-id=shhhunt-reachtarget-20251126-1 --env=X:\workspace\Shhhunt\Builds\MLReachTarget\Shhhunt.exe --results-dir=X:\workspace\MENTOR\ml-agents-training-results --force --base-port=5005
+
+C:\Users\juanj\anaconda3\envs\mlagents\lib\site-packages\mlagents\torch_utils\torch.py:4: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+C:\Users\juanj\anaconda3\envs\mlagents\lib\site-packages\mlagents\torch_utils\torch.py:4: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+[INFO] Connected to Unity environment with package version 2.0.2 and communication version 1.5.0
+[INFO] Connected new brain: ReachTarget?team=0
+
+            ┐  ╖
+        ╓╖╬│╡  ││╬╖╖
+    ╓╖╬│││││┘  ╬│││││╬╖
+ ╖╬│││││╬╜        ╙╬│││││╖╖                               ╗╗╗
+ ╬╬╬╬╖││╦╖        ╖╬││╗╣╣╣╬      ╟╣╣╬    ╟╣╣╣             ╜╜╜  ╟╣╣
+ ╬╬╬╬╬╬╬╬╖│╬╖╖╓╬╪│╓╣╣╣╣╣╣╣╬      ╟╣╣╬    ╟╣╣╣ ╒╣╣╖╗╣╣╣╗   ╣╣╣ ╣╣╣╣╣╣ ╟╣╣╖   ╣╣╣
+ ╬╬╬╬┐  ╙╬╬╬╬│╓╣╣╣╝╜  ╫╣╣╣╬      ╟╣╣╬    ╟╣╣╣ ╟╣╣╣╙ ╙╣╣╣  ╣╣╣ ╙╟╣╣╜╙  ╫╣╣  ╟╣╣
+ ╬╬╬╬┐     ╙╬╬╣╣      ╫╣╣╣╬      ╟╣╣╬    ╟╣╣╣ ╟╣╣╬   ╣╣╣  ╣╣╣  ╟╣╣     ╣╣╣┌╣╣╜
+ ╬╬╬╜       ╬╬╣╣      ╙╝╣╣╬      ╙╣╣╣╗╖╓╗╣╣╣╜ ╟╣╣╬   ╣╣╣  ╣╣╣  ╟╣╣╦╓    ╣╣╣╣╣
+ ╙   ╓╦╖    ╬╬╣╣   ╓╗╗╖            ╙╝╣╣╣╣╝╜   ╘╝╝╜   ╝╝╝  ╝╝╝   ╙╣╣╣    ╟╣╣╣
+   ╩╬╬╬╬╬╬╦╦╬╬╣╣╗╣╣╣╣╣╣╣╝                                             ╫╣╣╣╣
+      ╙╬╬╬╬╬╬╬╣╣╣╣╣╣╝╜
+          ╙╬╬╬╣╣╣╜
+             ╙
+        
+ Version information:
+  ml-agents: 1.2.0.dev0,
+  ml-agents-envs: 1.2.0.dev0,
+  Communicator API: 1.5.0,
+  PyTorch: 2.2.2+cu121
+[INFO] Hyperparameters for behavior name ReachTarget: 
+	trainer_type:	ppo
+	hyperparameters:	
+	  batch_size:	1024
+	  buffer_size:	10240
+	  learning_rate:	0.0003
+	  beta:	0.0005
+	  epsilon:	0.2
+	  lambd:	0.95
+	  num_epoch:	3
+	  shared_critic:	False
+	  learning_rate_schedule:	linear
+	  beta_schedule:	linear
+	  epsilon_schedule:	linear
+	checkpoint_interval:	50000
+	network_settings:	
+	  normalize:	True
+	  hidden_units:	128
+	  num_layers:	2
+	  vis_encode_type:	simple
+	  memory:	None
+	  goal_conditioning_type:	hyper
+	  deterministic:	False
+	reward_signals:	
+	  extrinsic:	
+	    gamma:	0.99
+	    strength:	1.0
+	    network_settings:	
+	      normalize:	False
+	      hidden_units:	128
+	      num_layers:	2
+	      vis_encode_type:	simple
+	      memory:	None
+	      goal_conditioning_type:	hyper
+	      deterministic:	False
+	init_path:	None
+	keep_checkpoints:	5
+	even_checkpoints:	False
+	max_steps:	500000
+	time_horizon:	64
+	summary_freq:	10000
+	threaded:	False
+	self_play:	None
+	behavioral_cloning:	None
+[INFO] ReachTarget. Step: 10000. Time Elapsed: 119.392 s. Mean Reward: -0.176. Std of Reward: 0.617. Training.
+ERROR conda.cli.main_run:execute(127): `conda run mlagents-learn X:\workspace\MENTOR\mlagents-example-profiles\ShhhuntReachTarget\ShhhuntReachTarget.yaml --run-id=shhhunt-reachtarget-20251126-1 --env=X:\workspace\Shhhunt\Builds\MLReachTarget\Shhhunt.exe --results-dir=X:\workspace\MENTOR\ml-agents-training-results --force --base-port=5005` failed. (See above for error)
+Process Process-1:
+Traceback (most recent call last):
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\site-packages\mlagents\trainers\subprocess_env_manager.py", line 181, in worker
+    env.step()
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\site-packages\mlagents_envs\timers.py", line 305, in wrapped
+    return func(*args, **kwargs)
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\site-packages\mlagents_envs\environment.py", line 348, in step
+    outputs = self._communicator.exchange(step_input, self._poll_process)
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\site-packages\mlagents_envs\rpc_communicator.py", line 142, in exchange
+    self.poll_for_timeout(poll_callback)
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\site-packages\mlagents_envs\rpc_communicator.py", line 111, in poll_for_timeout
+    poll_callback()
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\site-packages\mlagents_envs\environment.py", line 418, in _poll_process
+    raise UnityEnvironmentException(exc_msg)
+mlagents_envs.exception.UnityEnvironmentException: Environment shut down with return code 1.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\site-packages\mlagents\trainers\subprocess_env_manager.py", line 227, in worker
+    _send_response(EnvironmentCommand.ENV_EXITED, ex)
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\site-packages\mlagents\trainers\subprocess_env_manager.py", line 150, in _send_response
+    parent_conn.send(EnvironmentResponse(cmd_name, worker_id, payload))
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\multiprocessing\connection.py", line 206, in send
+    self._send_bytes(_ForkingPickler.dumps(obj))
+  File "C:\Users\juanj\anaconda3\envs\mlagents\lib\multiprocessing\connection.py", line 280, in _send_bytes
+    ov, err = _winapi.WriteFile(self._handle, buf, overlapped=True)
+BrokenPipeError: [WinError 232] The pipe is being closed

@@ -32,14 +32,6 @@ const reportSchema = z.object({
   resultsDir: z.string().optional(),
 });
 
-const interpreterSchema = z.object({
-  runId: z.string(),
-  resultsDir: z.string().optional(),
-  prompt: z.string().optional(),
-  openAiModel: z.string().optional(),
-  openAiApiKey: z.string().optional(),
-  checkOpenAi: z.boolean().optional(),
-});
 
 server.registerTool(
   "health",
@@ -82,18 +74,6 @@ server.registerTool(
   },
   async (input) => {
     const json = await postJson<unknown>("/report", normalizeBody(input));
-    return asText(JSON.stringify(json, null, 2));
-  }
-);
-
-server.registerTool(
-  "report-interpreter",
-  {
-    description: "Generate the report-interpreter payload (and optional OpenAI call)",
-    inputSchema: interpreterSchema,
-  },
-  async (input) => {
-    const json = await postJson<unknown>("/report-interpreter", normalizeBody(input));
     return asText(JSON.stringify(json, null, 2));
   }
 );

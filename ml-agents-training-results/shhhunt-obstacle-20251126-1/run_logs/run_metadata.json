@@ -1,0 +1,11 @@
+{
+  "EnvPath": "X:\\workspace\\Shhhunt\\Builds\\MLReachTargetObstacle\\Shhhunt.exe",
+  "ConfigPath": "X:\\workspace\\MENTOR\\mlagents-example-profiles\\ShhhuntReachTargetObstacle\\ShhhuntReachTargetObstacle.yaml",
+  "RunId": "shhhunt-obstacle-20251126-1",
+  "ResultsDirectory": "X:\\workspace\\MENTOR\\ml-agents-training-results",
+  "CondaEnvironmentName": "mlagents",
+  "BasePort": 5045,
+  "NoGraphics": false,
+  "SkipConda": false,
+  "LaunchTensorboard": false
+}

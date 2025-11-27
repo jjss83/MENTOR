@@ -30,7 +30,6 @@ The watcher restarts on saves; stop it with Ctrl+C.
 | `POST` | `/train` | Starts a new ML-Agents training job via the CLI runner. |
 | `POST` | `/train-status` | Returns the latest known status for a given `runId`. |
 | `POST` | `/report` | Generates a JSON summary for a completed run. |
-| `POST` | `/report-interpreter` | Runs the report interpreter pipeline (optionally calling OpenAI) for richer insights. |
 
 Swagger exposes example payloads for each endpoint when you browse `http://localhost:5113/swagger`.
 
@@ -111,16 +110,12 @@ Example response:
 
 ## Generate Reports
 - `/report` reuses the CLI `report` command to produce a JSON summary document. Use it after training has finished.
-- `/report-interpreter` feeds the report through the interpreter pipeline. Provide `prompt`, `openAiModel`, `openAiApiKey`, or `checkOpenAi` if you need to route through OpenAI yourself.
 
 Typical request:
 ```json
 {
   "runId": "run-3DBall-2024-08-10-153000",
-  "resultsDir": "X:/workspace/MENTOR/ml-agents-training-results",
-  "prompt": "Highlight any regressions",
-  "openAiModel": "gpt-4o-mini",
-  "checkOpenAi": false
+  "resultsDir": "X:/workspace/MENTOR/ml-agents-training-results"
 }
 ```
 

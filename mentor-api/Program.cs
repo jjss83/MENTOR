@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net.NetworkInformation;
@@ -76,50 +77,7 @@ app.MapPost("/report", async (ReportRequest request) =>
         return Results.BadRequest(new { error = ex.Message });
     }
 });
-app.MapPost("/report-interpreter", async (ReportInterpreterRequest request) =>
-{
-    if (string.IsNullOrWhiteSpace(request.RunId))
-    {
-        return Results.BadRequest(new { error = "runId is required.", usage = UsageText.GetReportInterpreterUsage() });
-    }
 
-    var cliArgs = CliArgs.FromReportInterpreter(request).ToArray();
-    if (!ReportInterpreterOptions.TryParse(cliArgs, out var options, out var error) || options is null)
-    {
-        return Results.BadRequest(new { error = error ?? "Invalid interpreter options.", usage = UsageText.GetReportInterpreterUsage() });
-    }
-
-    using var output = new StringWriter();
-    using var errors = new StringWriter();
-    var runner = new ReportInterpreterRunner(options, output, errors);
-    var exitCode = await runner.RunAsync();
-
-    var errorText = errors.ToString();
-    if (!string.IsNullOrWhiteSpace(errorText))
-    {
-        return Results.BadRequest(new { error = errorText.Trim(), usage = UsageText.GetReportInterpreterUsage(), exitCode });
-    }
-
-    var payloadText = output.ToString();
-    JsonNode? payload = null;
-    try
-    {
-        payload = JsonNode.Parse(payloadText);
-    }
-    catch
-    {
-        // If parsing fails, return raw content.
-    }
-
-    if (exitCode != 0)
-    {
-        return Results.BadRequest(new { error = "report-interpreter failed", output = payloadText, exitCode });
-    }
-
-    return payload is not null
-        ? Results.Json(payload, new JsonSerializerOptions { WriteIndented = true })
-        : Results.Text(payloadText, "application/json");
-});
 
 app.Run();
 internal static class CliArgs
@@ -202,23 +160,25 @@ internal static class CliArgs
         return args;
     }
 }
-internal sealed record TrainingRequest(string? ResultsDir, string? CondaEnv, int? BasePort, bool? NoGraphics, bool? SkipConda, bool? Tensorboard, string? EnvPath = null, string? Config = null, string? RunId = null); internal sealed record TrainingStatusRequest(string? ResultsDir, string? RunId = null); internal sealed record ReportRequest(string? ResultsDir, string? RunId = null); internal sealed record ReportInterpreterRequest(string? ResultsDir, string? Prompt, string? OpenAiModel, string? OpenAiApiKey, bool? CheckOpenAi, string? RunId = null); internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl)
+internal sealed record TrainingRequest(string? ResultsDir, string? CondaEnv, int? BasePort, bool? NoGraphics, bool? SkipConda, bool? Tensorboard, string? EnvPath = null, string? Config = null, string? RunId = null); internal sealed record TrainingStatusRequest(string? ResultsDir, string? RunId = null); internal sealed record ReportRequest(string? ResultsDir, string? RunId = null); internal sealed record ReportInterpreterRequest(string? ResultsDir, string? Prompt, string? OpenAiModel, string? OpenAiApiKey, bool? CheckOpenAi, string? RunId = null); internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl, IReadOnlyList<string>? LogTail)
 {
     public static TrainingStatusPayload FromFiles(string runId, string resultsDirectory)
     {
         var trainingStatusPath = TrainingRunStore.BuildTrainingStatusPath(resultsDirectory, runId);
+        var logPath = TrainingRunStore.BuildLogPath(resultsDirectory, runId);
+        var logTail = TrainingRunStore.ReadLogTail(logPath);
         if (File.Exists(trainingStatusPath))
         {
             var statusText = TryReadStatus(trainingStatusPath);
             var normalized = NormalizeStatus(statusText);
-            return new TrainingStatusPayload(runId, normalized, Completed: true, ExitCode: null, resultsDirectory, trainingStatusPath, null, TensorboardUrl: null);
+            return new TrainingStatusPayload(runId, normalized, Completed: true, ExitCode: null, resultsDirectory, trainingStatusPath, null, TensorboardUrl: null, LogTail: logTail);
         }
         var runDirectory = TrainingRunStore.BuildRunDirectory(resultsDirectory, runId);
         if (Directory.Exists(runDirectory))
         {
-            return new TrainingStatusPayload(runId, Status: "unknown", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, "Run directory exists but training_status.json has not been written yet.", TensorboardUrl: null);
+            return new TrainingStatusPayload(runId, Status: "unknown", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, "Run directory exists but training_status.json has not been written yet.", TensorboardUrl: null, LogTail: logTail);
         }
-        return new TrainingStatusPayload(runId, Status: "not-found", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, $"No run data found at '{runDirectory}'.", TensorboardUrl: null);
+        return new TrainingStatusPayload(runId, Status: "not-found", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, $"No run data found at '{runDirectory}'.", TensorboardUrl: null, LogTail: logTail);
     }
     private static string NormalizeStatus(string? status)
     {
@@ -522,6 +482,44 @@ internal sealed class TrainingRunStore
             return TrainingOptions.DefaultResultsDirectory;
         }
     }
+    internal static string BuildLogPath(string resultsDirectory, string runId)
+    {
+        return Path.Combine(resultsDirectory, runId, "run_logs", "mentor-api.log");
+    }
+
+    internal static IReadOnlyList<string> ReadLogTail(string? logPath, int lineCount = 10)
+    {
+        if (string.IsNullOrWhiteSpace(logPath) || !File.Exists(logPath))
+        {
+            return Array.Empty<string>();
+        }
+        try
+        {
+            using var stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            var buffer = new Queue<string>(lineCount + 1);
+            while (!reader.EndOfStream)
+            {
+                var line = reader.ReadLine();
+                if (line is null)
+                {
+                    break;
+                }
+                buffer.Enqueue(line);
+                if (buffer.Count > lineCount)
+                {
+                    buffer.Dequeue();
+                }
+            }
+            return buffer.ToArray();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+
     internal static string BuildTrainingStatusPath(string resultsDirectory, string runId)
     {
         return Path.Combine(resultsDirectory, runId, "run_logs", "training_status.json");
@@ -624,7 +622,8 @@ internal sealed class TrainingRunState
         }
         var trainingStatusPath = TrainingRunStore.BuildTrainingStatusPath(ResultsDirectory, RunId);
         var completed = status != "running";
-        return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message, TensorboardUrl);
+        var logTail = TrainingRunStore.ReadLogTail(LogPath);
+        return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message, TensorboardUrl, logTail);
     }
 }
 internal sealed record TrainingRunMetadata(string? EnvPath, string ConfigPath, string RunId, string ResultsDirectory, string CondaEnvironmentName, int? BasePort, bool NoGraphics, bool SkipConda, bool LaunchTensorboard)
@@ -670,6 +669,3 @@ internal sealed record TrainingRunOutcome(int? ExitCode, Exception? Error)
     public static TrainingRunOutcome FromExitCode(int exitCode) => new(exitCode, null);
     public static TrainingRunOutcome FromError(Exception ex) => new(null, ex);
 }
-
-
-
