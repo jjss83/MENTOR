@@ -5,17 +5,28 @@ using System.Net.NetworkInformation;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MentorTrainingRunner;
+using System.Diagnostics;
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(o => o.AllowSynchronousIO = true);
 builder.WebHost.UseUrls("http://localhost:5113");
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
 var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseCors();
 var runStore = new TrainingRunStore();
 Console.WriteLine("[Resume] Checking for unfinished training runs...");
 var resumeMessages = runStore.ResumeUnfinishedRuns(msg => Console.WriteLine($"[Resume] {msg}"));
@@ -55,6 +66,18 @@ app.MapGet("/train-status/{runId}", (string runId, string? resultsDir) =>
     var status = runStore.GetStatus(runId, resultsDir);
     return Results.Ok(status);
 });
+app.MapGet("/tensorboard/start", () =>
+{
+    var request = new StartTensorboardRequest(null, null, null, null, null);
+    var result = runStore.StartTensorboard(request);
+    if (!result.Started && !result.AlreadyRunning)
+    {
+        return Results.BadRequest(new { error = result.Message ?? "Unable to start TensorBoard." });
+    }
+    return Results.Ok(new { started = result.Started, alreadyRunning = result.AlreadyRunning, url = result.Url, message = result.Message });
+});
+
+
 app.Run();
 internal static class CliArgs
 {
@@ -116,6 +139,8 @@ internal sealed record CancelRunResult(CancelRunResultStatus Status, string? Mes
 }
 internal sealed record TrainingRequest(string? ResultsDir, string? CondaEnv, int? BasePort, bool? NoGraphics, bool? SkipConda, bool? Tensorboard, string? EnvPath = null, string? Config = null, string? RunId = null);
 internal sealed record CancelRunRequest(string? ResultsDir, string? RunId = null);
+internal sealed record StartTensorboardRequest(string? ResultsDir, string? RunId = null, string? CondaEnv = null, bool? SkipConda = null, int? Port = null);
+internal sealed record StartTensorboardResult(bool Started, bool AlreadyRunning, string? Url, string? Message);
 internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl, IReadOnlyList<string>? LogTail)
 {
     public static TrainingStatusPayload FromFiles(string runId, string resultsDirectory)
@@ -262,6 +287,61 @@ internal sealed class TrainingRunStore
         }
         return payloads;
     }
+    public StartTensorboardResult StartTensorboard(StartTensorboardRequest request)
+    {
+        var rawResultsDir = string.IsNullOrWhiteSpace(request.ResultsDir) ? TrainingOptions.DefaultResultsDirectory : request.ResultsDir;
+        var resultsDir = ResolveResultsDirectory(rawResultsDir);
+        var condaEnv = string.IsNullOrWhiteSpace(request.CondaEnv) ? null : request.CondaEnv.Trim();
+        var skipConda = request.SkipConda ?? false;
+        var tensorboardPort = request.Port ?? 6006;
+
+        if (!string.IsNullOrWhiteSpace(request.RunId))
+        {
+            var runDirectory = BuildRunDirectory(resultsDir, request.RunId);
+            var metadata = TrainingRunMetadata.TryLoad(runDirectory);
+            if (metadata is not null)
+            {
+                resultsDir = ResolveResultsDirectory(metadata.ResultsDirectory);
+                condaEnv ??= metadata.CondaEnvironmentName;
+                if (!request.SkipConda.HasValue)
+                {
+                    skipConda = metadata.SkipConda;
+                }
+            }
+        }
+
+        if (!Directory.Exists(resultsDir))
+        {
+            Directory.CreateDirectory(resultsDir);
+        }
+
+        var activePorts = GetActiveTcpPorts();
+        if (activePorts.Contains(tensorboardPort))
+        {
+            return new StartTensorboardResult(false, true, $"http://localhost:{tensorboardPort}", $"TensorBoard already running on port {tensorboardPort}.");
+        }
+
+        try
+        {
+            var process = CreateTensorboardProcess(resultsDir, condaEnv, skipConda, tensorboardPort);
+            if (!process.Start())
+            {
+                return new StartTensorboardResult(false, false, null, "Failed to start TensorBoard process.");
+            }
+
+            var earlyExitMessage = ObserveEarlyTensorboardExit(process);
+            if (earlyExitMessage is not null)
+            {
+                return new StartTensorboardResult(false, false, null, earlyExitMessage);
+            }
+
+            return new StartTensorboardResult(true, false, $"http://localhost:{tensorboardPort}", $"TensorBoard started on port {tensorboardPort}.");
+        }
+        catch (Exception ex)
+        {
+            return new StartTensorboardResult(false, false, null, ex.Message);
+        }
+    }
     public IReadOnlyList<string> ResumeUnfinishedRuns(Action<string>? log = null, string? resultsDirOverride = null)
     {
         var messages = new List<string>();
@@ -398,6 +478,66 @@ internal sealed class TrainingRunStore
         }
         return true;
     }
+    private static Process CreateTensorboardProcess(string resultsDir, string? condaEnv, bool skipConda, int port)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        SetIsolatedTempDirectory(startInfo);
+
+        if (skipConda)
+        {
+            startInfo.FileName = "tensorboard";
+        }
+        else
+        {
+            startInfo.FileName = ResolveCondaExecutable();
+            startInfo.ArgumentList.Add("run");
+            startInfo.ArgumentList.Add("--live-stream");
+            startInfo.ArgumentList.Add("-n");
+            startInfo.ArgumentList.Add(string.IsNullOrWhiteSpace(condaEnv) ? "mlagents" : condaEnv);
+            startInfo.ArgumentList.Add("tensorboard");
+        }
+
+        startInfo.ArgumentList.Add("--logdir");
+        startInfo.ArgumentList.Add(resultsDir);
+
+        startInfo.ArgumentList.Add("--port");
+        startInfo.ArgumentList.Add(port.ToString(CultureInfo.InvariantCulture));
+
+        startInfo.ArgumentList.Add("--host");
+        startInfo.ArgumentList.Add("localhost");
+
+        return new Process { StartInfo = startInfo };
+    }
+
+    private static void SetIsolatedTempDirectory(ProcessStartInfo startInfo)
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "mentor-api");
+        Directory.CreateDirectory(tempRoot);
+        var isolatedTemp = Path.Combine(tempRoot, Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(isolatedTemp);
+        startInfo.Environment["TMP"] = isolatedTemp;
+        startInfo.Environment["TEMP"] = isolatedTemp;
+        startInfo.Environment["TMPDIR"] = isolatedTemp;
+    }
+
+    private static string ResolveCondaExecutable()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable("CONDA_EXE");
+        if (!string.IsNullOrWhiteSpace(fromEnv) && File.Exists(fromEnv))
+        {
+            return fromEnv;
+        }
+
+        return "conda";
+    }
+
     private HashSet<int> CollectActiveReservedPorts()
     {
         var reserved = new HashSet<int>();
@@ -426,6 +566,41 @@ internal sealed class TrainingRunStore
         {
             return new HashSet<int>();
         }
+    }
+    private static string? ObserveEarlyTensorboardExit(Process process, int waitMilliseconds = 3000)
+    {
+        var waited = 0;
+        while (waited < waitMilliseconds)
+        {
+            var slice = Math.Min(500, waitMilliseconds - waited);
+            if (process.WaitForExit(slice))
+            {
+                var stderr = string.Empty;
+                var stdout = string.Empty;
+                try
+                {
+                    stderr = process.StandardError.ReadToEnd();
+                    stdout = process.StandardOutput.ReadToEnd();
+                }
+                catch
+                {
+                    // ignore read failures
+                }
+
+                var message = $"TensorBoard exited immediately with code {process.ExitCode}.";
+                var tail = string.Join(" ", new[] { stdout, stderr }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
+                if (!string.IsNullOrWhiteSpace(tail))
+                {
+                    message += " Output: " + tail;
+                }
+
+                return message;
+            }
+
+            waited += slice;
+        }
+
+        return null;
     }
     private static string ResolveResultsDirectory(string? resultsDirOverride)
     {
@@ -629,3 +804,4 @@ internal sealed record TrainingRunOutcome(int? ExitCode, Exception? Error)
     public static TrainingRunOutcome FromExitCode(int exitCode) => new(exitCode, null);
     public static TrainingRunOutcome FromError(Exception ex) => new(null, ex);
 }
+

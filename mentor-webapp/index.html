@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mentor Train Monitor</title>
+  <style>
+    :root {
+      --bg: #0b0c0f;
+      --glass: rgba(255, 255, 255, 0.06);
+      --stroke: rgba(255, 255, 255, 0.12);
+      --text: #e7e9ee;
+      --muted: #9ba1b0;
+      --accent: #7dd3fc;
+      --success: #6ee7b7;
+      --error: #f47272;
+      --warning: #f6c263;
+      --card-radius: 18px;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      --embed-height: 360px;
+      --log-height: 140px;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "SF Pro Display", "Segoe UI Variable", "Helvetica Neue", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 20% 20%, #1d2433, transparent 35%),
+                  radial-gradient(circle at 80% 0%, #132032, transparent 30%),
+                  linear-gradient(145deg, #06070a, #0d1118 60%, #0f1724);
+      letter-spacing: 0.01em;
+    }
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 26px 48px;
+    }
+    header {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .top-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    h1 {
+      margin: 6px 0 6px;
+      font-size: 34px;
+      font-weight: 700;
+      color: #f4f6fb;
+    }
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      max-width: 560px;
+      line-height: 1.4;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .embed-card {
+      background: var(--glass);
+      border: 1px solid var(--stroke);
+      border-radius: var(--card-radius);
+      padding: 14px 16px 10px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+    .embed-frame {
+      width: 100%;
+      height: var(--embed-height);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .embed-frame iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #0b0c0f;
+    }
+    .slider-wrap {
+      background: var(--glass);
+      border: 1px solid var(--stroke);
+      padding: 10px 12px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 240px;
+      box-shadow: var(--shadow);
+    }
+    .slider-label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 120px;
+    }
+    .slider-value {
+      font-weight: 600;
+      color: var(--text);
+    }
+    input[type="range"] {
+      accent-color: #7dd3fc;
+      width: 140px;
+    }
+    .input-wrap {
+      background: var(--glass);
+      border: 1px solid var(--stroke);
+      padding: 10px 12px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 260px;
+      box-shadow: var(--shadow);
+    }
+    label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 14px;
+      width: 100%;
+    }
+    button {
+      background: linear-gradient(120deg, #8ec5ff, #7dd3fc);
+      color: #0a0c10;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 12px 30px rgba(125, 211, 252, 0.25);
+      transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+    }
+    button.secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      border: 1px solid var(--stroke);
+      box-shadow: none;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 36px rgba(125, 211, 252, 0.3);
+    }
+    button:active {
+      transform: translateY(0);
+      opacity: 0.92;
+    }
+    .status-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .tile {
+      background: var(--glass);
+      border: 1px solid var(--stroke);
+      border-radius: var(--card-radius);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+    .health-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      box-shadow: 0 0 0 6px rgba(110, 231, 183, 0.1);
+      background: var(--success);
+    }
+    .health-dot.off {
+      background: var(--error);
+      box-shadow: 0 0 0 6px rgba(244, 114, 114, 0.1);
+    }
+    .health-dot.degraded {
+      background: var(--warning);
+      box-shadow: 0 0 0 6px rgba(246, 194, 99, 0.12);
+    }
+    .tile-title {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .tile-value {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .pill-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+      margin: 8px 0 4px;
+    }
+    .pill {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow);
+    }
+    .pill-label { color: var(--muted); font-size: 12px; }
+    .pill-value { font-size: 20px; font-weight: 700; }
+    main {
+      margin-top: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+    }
+    .section-title { font-size: 18px; font-weight: 700; }
+    .section-note { color: var(--muted); font-size: 13px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .card {
+      background: var(--glass);
+      border: 1px solid var(--stroke);
+      border-radius: var(--card-radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .run-id {
+      font-weight: 700;
+      font-size: 16px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--stroke);
+      font-size: 12px;
+      text-transform: capitalize;
+    }
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+    }
+    .status-running .status-dot { background: var(--accent); }
+    .status-succeeded .status-dot { background: var(--success); }
+    .status-failed .status-dot { background: var(--error); }
+    .status-canceled .status-dot { background: var(--warning); }
+    .status-unknown .status-dot { background: #94a3b8; }
+    .status-not-found .status-dot { background: #94a3b8; }
+    .meta-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    .meta {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--stroke);
+      font-size: 13px;
+    }
+    .label { color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+    .log {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+      color: #dfe5f5;
+      font-size: 12px;
+      white-space: pre-wrap;
+      max-height: var(--log-height);
+      overflow: hidden;
+    }
+    .empty {
+      text-align: center;
+      padding: 18px;
+      color: var(--muted);
+      border: 1px dashed var(--stroke);
+      border-radius: var(--card-radius);
+      background: rgba(255, 255, 255, 0.02);
+    }
+    @media (max-width: 640px) {
+      .page { padding: 22px 18px 32px; }
+      h1 { font-size: 28px; }
+      .card { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="top-line">
+        <div>
+          <div class="eyebrow">Mentor</div>
+          <h1>Train Monitor</h1>
+          <p class="subtitle">MENTOR keeps tabs on your training runs, surfacing health, counts, and live log tails in one glance.</p>
+        </div>
+        <div class="controls">
+          <div class="input-wrap">
+            <label for="api-base">API</label>
+            <input id="api-base" type="text" spellcheck="false" aria-label="API base" />
+          </div>
+          <div class="slider-wrap" aria-label="Refresh cadence">
+            <div class="slider-label">
+              <div class="label">Refresh cadence</div>
+              <div class="slider-value"><span id="refresh-seconds">5</span>s</div>
+            </div>
+            <input id="refresh-slider" type="range" min="1" max="10" step="1" value="5" aria-label="Refresh cadence (seconds)" />
+          </div>
+          <div class="slider-wrap" aria-label="TensorBoard height">
+            <div class="slider-label">
+              <div class="label">TensorBoard height</div>
+              <div class="slider-value"><span id="embed-height-value">360</span>px</div>
+            </div>
+            <input id="embed-height-slider" type="range" min="240" max="800" step="20" value="360" aria-label="TensorBoard height (px)" />
+          </div>
+          <div class="slider-wrap" aria-label="Run log height">
+            <div class="slider-label">
+              <div class="label">Run log height</div>
+              <div class="slider-value"><span id="log-height-value">140</span>px</div>
+            </div>
+            <input id="log-height-slider" type="range" min="100" max="400" step="20" value="140" aria-label="Run log height (px)" />
+          </div>
+          <button id="set-api">Set API</button>
+          <button id="refresh" class="secondary">Refresh now</button>
+        </div>
+      </div>
+      <div class="status-row">
+        <div class="tile">
+          <div id="health-dot" class="health-dot"></div>
+          <div>
+            <div class="tile-title">API health</div>
+            <div id="health-label" class="tile-value">Checking...</div>
+          </div>
+        </div>
+        <div class="tile">
+          <div>
+            <div class="tile-title">Auto refresh</div>
+            <div class="tile-value" id="refresh-label">Every 5s</div>
+          </div>
+        </div>
+        <div class="tile">
+          <div>
+            <div class="tile-title">Last updated</div>
+            <div class="tile-value" id="updated-label">-</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section id="tensorboard-embed" class="embed-card" hidden>
+        <div class="section-head">
+          <div class="section-title">TensorBoard — Environment / Cumulative Reward</div>
+          <div class="section-note" id="tensorboard-note"></div>
+        </div>
+        <div class="embed-frame">
+          <iframe id="tensorboard-frame" title="TensorBoard Environment Cumulative Reward"></iframe>
+        </div>
+      </section>
+
+      <section>
+        <div class="pill-row">
+          <div class="pill">
+            <div class="pill-label">Running</div>
+            <div class="pill-value" id="running-count">0</div>
+          </div>
+          <div class="pill">
+            <div class="pill-label">Completed</div>
+            <div class="pill-value" id="completed-count">0</div>
+          </div>
+          <div class="pill">
+            <div class="pill-label">Failures</div>
+            <div class="pill-value" id="failed-count">0</div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div class="section-title">Runs</div>
+          <div class="section-note" id="runs-note"></div>
+        </div>
+        <div id="run-grid" class="grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const state = {
+        apiBase: localStorage.getItem('mentorApiBase') || 'http://localhost:5113',
+        refreshMs: 5000,
+        refreshHandle: null,
+        tickerHandle: null,
+        nextRefreshAt: null,
+        embedHeight: 360,
+        logHeight: 140,
+      };
+
+      const defaultTensorboardUrl = 'http://localhost:6006/';
+
+      const storedRefreshMs = Number(localStorage.getItem('mentorRefreshMs'));
+      if (storedRefreshMs >= 1000 && storedRefreshMs <= 10000) {
+        state.refreshMs = storedRefreshMs;
+      }
+
+      const storedEmbedHeight = Number(localStorage.getItem('mentorEmbedHeight'));
+      if (storedEmbedHeight >= 240 && storedEmbedHeight <= 800) {
+        state.embedHeight = storedEmbedHeight;
+      }
+
+      const storedLogHeight = Number(localStorage.getItem('mentorLogHeight'));
+      if (storedLogHeight >= 100 && storedLogHeight <= 400) {
+        state.logHeight = storedLogHeight;
+      }
+
+      const el = {
+        apiInput: document.getElementById('api-base'),
+        healthDot: document.getElementById('health-dot'),
+        healthLabel: document.getElementById('health-label'),
+        refreshLabel: document.getElementById('refresh-label'),
+        updatedLabel: document.getElementById('updated-label'),
+        refreshSlider: document.getElementById('refresh-slider'),
+        refreshSeconds: document.getElementById('refresh-seconds'),
+        embedHeightSlider: document.getElementById('embed-height-slider'),
+        embedHeightValue: document.getElementById('embed-height-value'),
+        logHeightSlider: document.getElementById('log-height-slider'),
+        logHeightValue: document.getElementById('log-height-value'),
+        tbSection: document.getElementById('tensorboard-embed'),
+        tbFrame: document.getElementById('tensorboard-frame'),
+        tbNote: document.getElementById('tensorboard-note'),
+        runGrid: document.getElementById('run-grid'),
+        runsNote: document.getElementById('runs-note'),
+        runningCount: document.getElementById('running-count'),
+        completedCount: document.getElementById('completed-count'),
+        failedCount: document.getElementById('failed-count'),
+        refreshBtn: document.getElementById('refresh'),
+        setApiBtn: document.getElementById('set-api'),
+      };
+
+      const pick = (obj, key) => obj?.[key] ?? obj?.[key.charAt(0).toUpperCase() + key.slice(1)];
+
+      el.apiInput.value = state.apiBase;
+      const initialSeconds = state.refreshMs / 1000;
+      el.refreshLabel.textContent = `Every ${initialSeconds}s`;
+      el.refreshSlider.value = initialSeconds;
+      el.refreshSeconds.textContent = initialSeconds;
+      el.embedHeightSlider.value = state.embedHeight;
+      el.embedHeightValue.textContent = state.embedHeight;
+      el.logHeightSlider.value = state.logHeight;
+      el.logHeightValue.textContent = state.logHeight;
+      document.documentElement.style.setProperty('--embed-height', `${state.embedHeight}px`);
+      document.documentElement.style.setProperty('--log-height', `${state.logHeight}px`);
+
+      function setApiBase(value) {
+        if (!value) return;
+        state.apiBase = value.trim().replace(/\/$/, '');
+        localStorage.setItem('mentorApiBase', state.apiBase);
+      }
+
+      function setRefreshMs(seconds) {
+        const fallback = state.refreshMs / 1000;
+        const secs = Math.min(10, Math.max(1, Number(seconds) || fallback));
+        state.refreshMs = secs * 1000;
+        localStorage.setItem('mentorRefreshMs', state.refreshMs);
+        el.refreshSeconds.textContent = secs;
+        el.refreshSlider.value = secs;
+        scheduleNextRefresh();
+      }
+
+      function setEmbedHeight(px) {
+        const fallback = state.embedHeight;
+        const value = Math.min(800, Math.max(240, Number(px) || fallback));
+        state.embedHeight = value;
+        localStorage.setItem('mentorEmbedHeight', value);
+        el.embedHeightSlider.value = value;
+        el.embedHeightValue.textContent = value;
+        document.documentElement.style.setProperty('--embed-height', `${value}px`);
+      }
+
+      function setLogHeight(px) {
+        const fallback = state.logHeight;
+        const value = Math.min(400, Math.max(100, Number(px) || fallback));
+        state.logHeight = value;
+        localStorage.setItem('mentorLogHeight', value);
+        el.logHeightSlider.value = value;
+        el.logHeightValue.textContent = value;
+        document.documentElement.style.setProperty('--log-height', `${value}px`);
+      }
+
+      async function fetchJson(url) {
+        const response = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `Request failed (${response.status})`);
+        }
+        return response.json();
+      }
+
+      async function updateHealth() {
+        try {
+          const data = await fetchJson(`${state.apiBase}/health`);
+          const healthy = data && data.status === 'ok';
+          renderHealth(healthy, healthy ? 'Operational' : 'Degraded');
+        } catch (err) {
+          renderHealth(false, 'Offline');
+          el.runsNote.textContent = 'API unreachable. Check the base URL or start mentor-api.';
+          console.error(err);
+        }
+      }
+
+      function renderHealth(isUp, label) {
+        el.healthLabel.textContent = label;
+        el.healthDot.classList.remove('off', 'degraded');
+        if (!isUp) {
+          el.healthDot.classList.add('off');
+        }
+      }
+
+      function updateRefreshLabel() {
+        if (!state.nextRefreshAt) {
+          el.refreshLabel.textContent = `Every ${state.refreshMs / 1000}s`;
+          return;
+        }
+        const remainingMs = Math.max(0, state.nextRefreshAt - Date.now());
+        const seconds = Math.ceil(remainingMs / 1000);
+        el.refreshLabel.textContent = `Next refresh in ${seconds}s`;
+      }
+
+      function startTicker() {
+        if (state.tickerHandle) {
+          clearInterval(state.tickerHandle);
+        }
+        updateRefreshLabel();
+        state.tickerHandle = setInterval(updateRefreshLabel, 500);
+      }
+
+      function statusClass(status) {
+        const normalized = (status || '').toLowerCase();
+        if (normalized === 'running') return 'status-running';
+        if (normalized === 'succeeded' || normalized === 'success' || normalized === 'completed') return 'status-succeeded';
+        if (normalized === 'failed' || normalized === 'failure') return 'status-failed';
+        if (normalized === 'canceled' || normalized === 'cancelled') return 'status-canceled';
+        if (normalized === 'unknown') return 'status-unknown';
+        return 'status-not-found';
+      }
+
+      function renderRuns(runs, errorMessage) {
+        el.runGrid.innerHTML = '';
+        if (errorMessage) {
+          const div = document.createElement('div');
+          div.className = 'empty';
+          div.textContent = errorMessage;
+          el.runGrid.appendChild(div);
+          setCounts([]);
+          renderTensorboard([]);
+          return;
+        }
+        const list = Array.isArray(runs) ? runs.slice() : [];
+        if (!list.length) {
+          const div = document.createElement('div');
+          div.className = 'empty';
+          div.textContent = 'No runs yet. Kick off training to see status here.';
+          el.runGrid.appendChild(div);
+          setCounts([]);
+          renderTensorboard([]);
+          return;
+        }
+        list.sort((a, b) => Number(pick(a, 'completed')) - Number(pick(b, 'completed')));
+        list.forEach(run => el.runGrid.appendChild(buildCard(run)));
+        setCounts(list);
+        el.runsNote.textContent = `${list.length} run${list.length === 1 ? '' : 's'} tracked`;
+        renderTensorboard(list);
+      }
+
+      function buildCard(run) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const header = document.createElement('div');
+        header.className = 'card-header';
+        const id = document.createElement('div');
+        id.className = 'run-id';
+        id.textContent = pick(run, 'runId') || 'Unknown run';
+        const chip = document.createElement('div');
+        const statusText = pick(run, 'status');
+        const sClass = statusClass(statusText);
+        chip.className = `status-chip ${sClass}`;
+        const dot = document.createElement('span');
+        dot.className = 'status-dot';
+        const label = document.createElement('span');
+        label.textContent = statusText || 'unknown';
+        chip.append(dot, label);
+        header.append(id, chip);
+
+        const metaRow = document.createElement('div');
+        metaRow.className = 'meta-row';
+        metaRow.append(
+          createMeta('Results', pick(run, 'resultsDirectory') || '-'),
+          createMeta('Exit code', pick(run, 'exitCode') ?? '-'),
+          createMeta('TensorBoard', pick(run, 'tensorboardUrl') || '-')
+        );
+
+        const log = document.createElement('div');
+        log.className = 'log';
+        const logTail = pick(run, 'logTail');
+        const logs = Array.isArray(logTail) ? logTail.filter(Boolean) : [];
+        log.textContent = logs.length ? logs.join('\n') : 'Waiting for log output...';
+
+        const message = pick(run, 'message');
+        if (message) {
+          const msg = document.createElement('div');
+          msg.className = 'meta';
+          const labelEl = document.createElement('div');
+          labelEl.className = 'label';
+          labelEl.textContent = 'Message';
+          const text = document.createElement('div');
+          text.textContent = message;
+          msg.append(labelEl, text);
+          card.append(header, metaRow, msg, log);
+        } else {
+          card.append(header, metaRow, log);
+        }
+        return card;
+      }
+
+      function createMeta(label, value) {
+        const wrap = document.createElement('div');
+        wrap.className = 'meta';
+        const l = document.createElement('div');
+        l.className = 'label';
+        l.textContent = label;
+        const v = document.createElement('div');
+        v.textContent = value;
+        wrap.append(l, v);
+        return wrap;
+      }
+
+      function renderTensorboard(runs) {
+        const list = Array.isArray(runs) ? runs : [];
+        const withTb = list.find(r => pick(r, 'tensorboardUrl'));
+        const url = withTb ? pick(withTb, 'tensorboardUrl') : defaultTensorboardUrl;
+        const note = withTb ? `From run ${pick(withTb, 'runId') || 'unknown'}` : 'Default (localhost:6006)';
+        if (!url) {
+          el.tbSection.hidden = true;
+          el.tbFrame.removeAttribute('src');
+          return;
+        }
+        const current = el.tbFrame.getAttribute('src');
+        if (current !== url) {
+          el.tbFrame.setAttribute('src', url);
+        }
+        el.tbNote.textContent = note;
+        el.tbSection.hidden = false;
+      }
+
+      function setCounts(runs) {
+        const summary = runs.reduce((acc, run) => {
+          const status = (pick(run, 'status') || '').toLowerCase();
+          if (status === 'running') acc.running += 1;
+          if (status === 'failed' || status === 'failure') acc.failed += 1;
+          if (pick(run, 'completed')) acc.completed += 1;
+          return acc;
+        }, { running: 0, completed: 0, failed: 0 });
+        el.runningCount.textContent = summary.running;
+        el.completedCount.textContent = summary.completed;
+        el.failedCount.textContent = summary.failed;
+      }
+
+      async function refreshAll() {
+        await Promise.all([
+          updateHealth(),
+          fetchJson(`${state.apiBase}/train-status`).then(data => renderRuns(data)).catch(err => {
+            console.error(err);
+            renderRuns([], 'Unable to load runs.');
+          })
+        ]);
+        const now = new Date();
+        el.updatedLabel.textContent = now.toLocaleTimeString();
+      }
+
+      function scheduleNextRefresh() {
+        if (state.refreshHandle) {
+          clearTimeout(state.refreshHandle);
+        }
+        state.nextRefreshAt = Date.now() + state.refreshMs;
+        updateRefreshLabel();
+        state.refreshHandle = setTimeout(async () => {
+          await refreshAll();
+          scheduleNextRefresh();
+        }, state.refreshMs);
+      }
+
+      function startLoop() {
+        if (state.refreshHandle) {
+          clearTimeout(state.refreshHandle);
+        }
+        if (state.tickerHandle) {
+          clearInterval(state.tickerHandle);
+        }
+        state.nextRefreshAt = Date.now() + state.refreshMs;
+        startTicker();
+        refreshAll();
+        state.refreshHandle = setTimeout(async () => {
+          await refreshAll();
+          scheduleNextRefresh();
+        }, state.refreshMs);
+      }
+
+      el.refreshBtn.addEventListener('click', async () => {
+        await refreshAll();
+        scheduleNextRefresh();
+      });
+      el.refreshSlider.addEventListener('input', (event) => {
+        setRefreshMs(event.target.value);
+      });
+      el.embedHeightSlider.addEventListener('input', (event) => {
+        setEmbedHeight(event.target.value);
+      });
+      el.logHeightSlider.addEventListener('input', (event) => {
+        setLogHeight(event.target.value);
+      });
+      el.setApiBtn.addEventListener('click', () => {
+        setApiBase(el.apiInput.value);
+        refreshAll();
+        scheduleNextRefresh();
+      });
+
+      startLoop();
+    })();
+  </script>
+</body>
+</html>
+
+

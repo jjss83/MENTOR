@@ -276,6 +276,8 @@ internal sealed class TrainingSessionRunner
         arguments.Add("--force");
 
         arguments.Add($"--base-port={_basePort}");
+        arguments.Add("--torch-device");
+        arguments.Add("cuda");
 
         if (_options.NoGraphics)
         {
@@ -434,4 +436,3 @@ internal sealed class TrainingSessionRunner
         });
     }
 }
-
