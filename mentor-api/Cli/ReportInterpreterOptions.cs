@@ -8,7 +8,7 @@ internal sealed record ReportInterpreterOptions(
     string? OpenAiApiKey,
     bool CheckOpenAi)
 {
-    private const string DefaultResultsDirectory = @"X:\\workspace\\ml-agents\\results";
+    private const string DefaultResultsDirectory = @"X:\workspace\MENTOR\ml-agents-training-results";
     private const string DefaultPrompt = "Explain current results";
     private const string DefaultModel = "gpt-4o-mini";
 

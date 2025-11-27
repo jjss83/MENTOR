@@ -4,7 +4,7 @@ internal sealed record ReportOptions(
     string RunId,
     string ResultsDirectory)
 {
-    private const string DefaultResultsDirectory = @"X:\\workspace\\ml-agents\\results";
+    private const string DefaultResultsDirectory = @"X:\workspace\MENTOR\ml-agents-training-results";
 
     public static bool TryParse(string[] args, out ReportOptions? options, out string? error)
     {

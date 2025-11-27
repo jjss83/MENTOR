@@ -25,6 +25,8 @@ internal sealed class TrainingSessionRunner
     private readonly int? _tensorboardPort;
     private readonly int _basePort;
     private readonly string? _basePortMessage;
+    private Process? _mlAgentsProcess;
+    private bool _cancelRequested;
     private bool _reuseExistingTensorboard;
 
     public TrainingSessionRunner(
@@ -47,12 +49,19 @@ internal sealed class TrainingSessionRunner
 
     public string? TensorboardUrl => _tensorboardPort.HasValue ? $"http://localhost:{_tensorboardPort.Value}" : null;
 
+    public void RequestCancel()
+    {
+        _cancelRequested = true;
+        TryTerminateProcessTree(_mlAgentsProcess);
+    }
+
     public async Task<int> RunAsync()
     {
         Directory.CreateDirectory(_options.ResultsDirectory);
 
-        using var process = CreateProcess();
-        using var tensorboardProcess = _options.LaunchTensorBoard && !_reuseExistingTensorboard ? CreateTensorBoardProcess() : null;
+        var process = CreateProcess();
+        _mlAgentsProcess = process;
+        var tensorboardProcess = _options.LaunchTensorBoard && !_reuseExistingTensorboard ? CreateTensorBoardProcess() : null;
         WriteLine($"Writing training artifacts to '{_options.ResultsDirectory}'.");
         if (!string.IsNullOrWhiteSpace(_basePortMessage))
         {
@@ -425,5 +434,4 @@ internal sealed class TrainingSessionRunner
         });
     }
 }
-
 
