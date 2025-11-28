@@ -23,12 +23,7 @@ const trainingSchema = z.object({
 });
 
 const trainStatusSchema = z.object({
-  runId: z.string(),
-  resultsDir: z.string().optional(),
-});
-
-const reportSchema = z.object({
-  runId: z.string(),
+  runId: z.string().optional(),
   resultsDir: z.string().optional(),
 });
 
@@ -61,19 +56,11 @@ server.registerTool(
     inputSchema: trainStatusSchema,
   },
   async (input) => {
-    const json = await postJson<unknown>("/train-status", normalizeBody(input));
-    return asText(JSON.stringify(json, null, 2));
-  }
-);
-
-server.registerTool(
-  "report",
-  {
-    description: "Emit the mentor-cli report output for a run",
-    inputSchema: reportSchema,
-  },
-  async (input) => {
-    const json = await postJson<unknown>("/report", normalizeBody(input));
+    const query = buildQuery({ resultsDir: input.resultsDir });
+    const path = input.runId
+      ? `/train-status/${encodeURIComponent(input.runId)}${query}`
+      : `/train-status${query}`;
+    const json = await getJson<unknown>(path);
     return asText(JSON.stringify(json, null, 2));
   }
 );
@@ -99,6 +86,17 @@ function normalizeBody<T extends Record<string, unknown>>(body: T): T {
   }
 
   return clone as T;
+}
+
+function buildQuery(params: Record<string, string | undefined>): string {
+  const entries = Object.entries(params).filter(([, value]) => value);
+  if (!entries.length) {
+    return "";
+  }
+  const search = entries
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value!)}`)
+    .join("&");
+  return `?${search}`;
 }
 
 async function postJson<TResponse>(path: string, body: unknown): Promise<TResponse> {
