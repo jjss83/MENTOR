@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mentor Train Monitor</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <style>
     :root {
       --bg: #0b0c0f;
@@ -222,6 +223,46 @@
     }
     .pill-label { color: var(--muted); font-size: 12px; }
     .pill-value { font-size: 20px; font-weight: 700; }
+    .process-card { gap: 10px; }
+    .process-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .micro-label { color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      font-size: 12px;
+    }
+    .chip.alert { border-color: var(--warning); color: var(--warning); }
+    .action-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .action-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    select {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--stroke);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 10px 12px;
+      min-width: 220px;
+    }
     main {
       margin-top: 18px;
       display: flex;
@@ -233,9 +274,28 @@
       justify-content: space-between;
       align-items: baseline;
       gap: 12px;
+      flex-wrap: wrap;
     }
     .section-title { font-size: 18px; font-weight: 700; }
     .section-note { color: var(--muted); font-size: 13px; }
+    .selection-note { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .selection-chip {
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      font-size: 12px;
+    }
+    .clear-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--stroke);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .clear-btn:hover { opacity: 0.9; }
     .grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -252,6 +312,8 @@
       flex-direction: column;
       gap: 10px;
     }
+    .card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.4); }
+    .card.collapsed { opacity: 0.82; }
     .card-header {
       display: flex;
       justify-content: space-between;
@@ -413,10 +475,43 @@
         </div>
       </section>
 
+      <section class="card process-card">
+        <div class="section-head">
+          <div class="section-title">Process watch</div>
+          <div class="section-note" id="process-note">Waiting for first update...</div>
+        </div>
+        <div class="process-row">
+          <div>
+            <div class="pill-label">mlagents-learn.exe</div>
+            <div class="pill-value" id="mlagents-count">0</div>
+            <div class="micro-label" id="mlagents-note">processes running</div>
+          </div>
+          <div>
+            <div class="pill-label">Environment executables</div>
+            <div id="env-running" class="chip-row"></div>
+            <div class="micro-label" id="env-note">Discovering env executables from results folders.</div>
+          </div>
+        </div>
+        <div class="action-row">
+          <div class="pill-label">Kill processes</div>
+          <div class="action-controls">
+            <select id="kill-select" aria-label="Executable to kill">
+              <option value="">Select executable</option>
+            </select>
+            <button id="kill-btn" class="secondary">Kill all</button>
+          </div>
+          <div class="micro-label" id="kill-note">Choose an executable to terminate its running processes.</div>
+        </div>
+      </section>
+
       <section>
         <div class="section-head">
           <div class="section-title">Runs</div>
           <div class="section-note" id="runs-note"></div>
+          <div class="selection-note">
+            <span class="selection-chip" id="selection-chip">0 of 0 showing details</span>
+            <button class="clear-btn" id="clear-selection">Show all details</button>
+          </div>
         </div>
         <div id="run-grid" class="grid"></div>
       </section>
@@ -433,6 +528,9 @@
         nextRefreshAt: null,
         embedHeight: 360,
         logHeight: 140,
+        knownEnvExecutables: [],
+        hiddenRuns: new Set(),
+        lastRuns: [],
       };
 
       const defaultTensorboardUrl = 'http://localhost:6006/';
@@ -469,9 +567,19 @@
         tbNote: document.getElementById('tensorboard-note'),
         runGrid: document.getElementById('run-grid'),
         runsNote: document.getElementById('runs-note'),
+        selectionChip: document.getElementById('selection-chip'),
+        clearSelection: document.getElementById('clear-selection'),
         runningCount: document.getElementById('running-count'),
         completedCount: document.getElementById('completed-count'),
         failedCount: document.getElementById('failed-count'),
+        processNote: document.getElementById('process-note'),
+        mlagentsCount: document.getElementById('mlagents-count'),
+        mlagentsNote: document.getElementById('mlagents-note'),
+        envRunning: document.getElementById('env-running'),
+        envNote: document.getElementById('env-note'),
+        killSelect: document.getElementById('kill-select'),
+        killBtn: document.getElementById('kill-btn'),
+        killNote: document.getElementById('kill-note'),
         refreshBtn: document.getElementById('refresh'),
         setApiBtn: document.getElementById('set-api'),
       };
@@ -535,6 +643,24 @@
         return response.json();
       }
 
+      async function postJson(url, body) {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(body || {}),
+        });
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(text || `Request failed (${response.status})`);
+        }
+        if (!text) return {};
+        try {
+          return JSON.parse(text);
+        } catch {
+          return {};
+        }
+      }
+
       async function updateHealth() {
         try {
           const data = await fetchJson(`${state.apiBase}/health`);
@@ -592,9 +718,13 @@
           el.runGrid.appendChild(div);
           setCounts([]);
           renderTensorboard([]);
+          state.hiddenRuns.clear();
+          state.lastRuns = [];
+          updateSelectionChip();
           return;
         }
         const list = Array.isArray(runs) ? runs.slice() : [];
+        state.lastRuns = list;
         if (!list.length) {
           const div = document.createElement('div');
           div.className = 'empty';
@@ -602,13 +732,18 @@
           el.runGrid.appendChild(div);
           setCounts([]);
           renderTensorboard([]);
+          state.hiddenRuns.clear();
+          updateSelectionChip();
           return;
         }
         list.sort((a, b) => Number(pick(a, 'completed')) - Number(pick(b, 'completed')));
+        pruneSelection(list.map(r => pick(r, 'runId')).filter(Boolean));
         list.forEach(run => el.runGrid.appendChild(buildCard(run)));
+
         setCounts(list);
         el.runsNote.textContent = `${list.length} run${list.length === 1 ? '' : 's'} tracked`;
         renderTensorboard(list);
+        updateSelectionChip();
       }
 
       function buildCard(run) {
@@ -616,9 +751,22 @@
         card.className = 'card';
         const header = document.createElement('div');
         header.className = 'card-header';
+        const runId = pick(run, 'runId') || 'Unknown run';
+        const selection = document.createElement('input');
+        selection.type = 'checkbox';
+        selection.ariaLabel = `Show details for ${runId}`;
+        const detailsVisible = !state.hiddenRuns.has(runId);
+        selection.checked = detailsVisible;
+        selection.addEventListener('click', (event) => {
+          event.stopPropagation();
+          toggleRunSelection(runId, selection.checked);
+        });
         const id = document.createElement('div');
         id.className = 'run-id';
-        id.textContent = pick(run, 'runId') || 'Unknown run';
+        id.textContent = runId;
+        const toggleLabel = document.createElement('div');
+        toggleLabel.className = 'pill-label';
+        toggleLabel.textContent = 'Details';
         const chip = document.createElement('div');
         const statusText = pick(run, 'status');
         const sClass = statusClass(statusText);
@@ -628,7 +776,12 @@
         const label = document.createElement('span');
         label.textContent = statusText || 'unknown';
         chip.append(dot, label);
-        header.append(id, chip);
+        const selectionWrap = document.createElement('div');
+        selectionWrap.style.display = 'flex';
+        selectionWrap.style.alignItems = 'center';
+        selectionWrap.style.gap = '6px';
+        selectionWrap.append(selection, toggleLabel);
+        header.append(selectionWrap, id, chip);
 
         const metaRow = document.createElement('div');
         metaRow.className = 'meta-row';
@@ -644,6 +797,8 @@
         const logs = Array.isArray(logTail) ? logTail.filter(Boolean) : [];
         log.textContent = logs.length ? logs.join('\n') : 'Waiting for log output...';
 
+        const detailsWrap = document.createElement('div');
+        detailsWrap.className = 'card-details';
         const message = pick(run, 'message');
         if (message) {
           const msg = document.createElement('div');
@@ -654,10 +809,24 @@
           const text = document.createElement('div');
           text.textContent = message;
           msg.append(labelEl, text);
-          card.append(header, metaRow, msg, log);
+          detailsWrap.append(metaRow, msg, log);
         } else {
-          card.append(header, metaRow, log);
+          detailsWrap.append(metaRow, log);
         }
+
+        detailsWrap.hidden = !detailsVisible;
+        card.append(header, detailsWrap);
+        if (!detailsVisible) {
+          card.classList.add('collapsed');
+        } else {
+          card.classList.add('selected');
+        }
+
+        card.addEventListener('click', () => {
+          const next = state.hiddenRuns.has(runId);
+          selection.checked = next;
+          toggleRunSelection(runId, next);
+        });
         return card;
       }
 
@@ -671,6 +840,27 @@
         v.textContent = value;
         wrap.append(l, v);
         return wrap;
+      }
+
+      function toggleRunSelection(runId, selected) {
+        if (!runId) return;
+        if (selected) {
+          state.hiddenRuns.delete(runId);
+        } else {
+          state.hiddenRuns.add(runId);
+        }
+        updateSelectionChip();
+        document.querySelectorAll('.card').forEach(card => {
+          const title = card.querySelector('.run-id')?.textContent;
+          if (title === runId) {
+            const details = card.querySelector('.card-details');
+            if (details) {
+              details.hidden = !selected;
+            }
+            card.classList.toggle('selected', selected);
+            card.classList.toggle('collapsed', !selected);
+          }
+        });
       }
 
       function renderTensorboard(runs) {
@@ -704,13 +894,137 @@
         el.failedCount.textContent = summary.failed;
       }
 
+      function pruneSelection(validRunIds) {
+        const valid = new Set(validRunIds);
+        state.hiddenRuns = new Set([...state.hiddenRuns].filter(id => valid.has(id)));
+      }
+
+      function updateSelectionChip() {
+        const total = state.lastRuns.length;
+        const hidden = state.hiddenRuns.size;
+        const visible = Math.max(0, total - hidden);
+        el.selectionChip.textContent = `${visible} of ${total} showing details`;
+      }
+
+      function updateKillOptions(knownList) {
+        const select = el.killSelect;
+        const previous = select.value;
+        const options = ['mlagents-learn.exe', ...new Set(Array.isArray(knownList) ? knownList : [])];
+        select.innerHTML = '<option value="">Select executable</option>';
+        options.forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          select.append(opt);
+        });
+        if (previous && options.includes(previous)) {
+          select.value = previous;
+        }
+      }
+
+      function renderProcessStatus(status, errorMessage) {
+        const data = status || {};
+        const resultsDir = pick(data, 'resultsDirectory') || 'Unknown results dir';
+        const processError = errorMessage || null;
+        el.processNote.textContent = processError ?? `Results dir: ${resultsDir}`;
+
+        const count = Number(pick(data, 'mlagentsLearnProcesses') ?? 0);
+        const safeCount = Number.isFinite(count) ? count : 0;
+        el.mlagentsCount.textContent = safeCount;
+        el.mlagentsNote.textContent = `${safeCount === 1 ? 'process' : 'processes'} running`;
+
+        el.envRunning.innerHTML = '';
+        if (processError) {
+          const chip = document.createElement('div');
+          chip.className = 'chip alert';
+          chip.textContent = 'Process info unavailable';
+          el.envRunning.append(chip);
+          el.envNote.textContent = 'Refresh or verify the API to restore process visibility.';
+          state.knownEnvExecutables = [];
+          updateKillOptions(state.knownEnvExecutables);
+          return;
+        }
+
+        const running = (() => {
+          const value = pick(data, 'runningEnvExecutables');
+          return Array.isArray(value) ? value.filter(Boolean) : [];
+        })();
+        const known = (() => {
+          const value = pick(data, 'knownEnvExecutables');
+          return Array.isArray(value) ? value.filter(Boolean) : [];
+        })();
+
+        state.knownEnvExecutables = known;
+        updateKillOptions(state.knownEnvExecutables);
+
+        if (!running.length) {
+          const chip = document.createElement('div');
+          chip.className = 'chip';
+          chip.textContent = 'No env executables running';
+          el.envRunning.append(chip);
+        } else {
+          running.forEach(name => {
+            const chip = document.createElement('div');
+            chip.className = 'chip';
+            chip.textContent = name;
+            el.envRunning.append(chip);
+          });
+        }
+
+        if (known.length) {
+          el.envNote.textContent = `Tracking ${known.length} env exe${known.length === 1 ? '' : 's'} from results folders.`;
+        } else {
+          el.envNote.textContent = 'No env executables discovered in results folders yet.';
+        }
+      }
+
+      async function updateProcessStatus() {
+        try {
+          const data = await fetchJson(`${state.apiBase}/process-status`);
+          renderProcessStatus(data);
+        } catch (err) {
+          console.error(err);
+          renderProcessStatus(null, 'Unable to load process info.');
+          throw err;
+        }
+      }
+
+      async function killSelectedExecutable() {
+        const executable = el.killSelect.value;
+        if (!executable) {
+          el.killNote.textContent = 'Pick an executable to kill.';
+          return;
+        }
+        el.killBtn.disabled = true;
+        el.killBtn.textContent = 'Killing...';
+        try {
+          const result = await postJson(`${state.apiBase}/process-kill`, { executable });
+          const matched = Number(pick(result, 'matchedProcesses') ?? 0);
+          const killed = Number(pick(result, 'killedProcesses') ?? 0);
+          const errors = Array.isArray(result?.errors) ? result.errors.filter(Boolean) : [];
+          if (errors.length) {
+            el.killNote.textContent = `${executable}: matched ${matched}, killed ${killed}. Errors: ${errors.join(' | ')}`;
+          } else {
+            el.killNote.textContent = `${executable}: matched ${matched}, killed ${killed}.`;
+          }
+          await updateProcessStatus();
+        } catch (err) {
+          console.error(err);
+          el.killNote.textContent = err?.message || 'Failed to kill processes.';
+        } finally {
+          el.killBtn.disabled = false;
+          el.killBtn.textContent = 'Kill all';
+        }
+      }
+
       async function refreshAll() {
         await Promise.all([
           updateHealth(),
           fetchJson(`${state.apiBase}/train-status`).then(data => renderRuns(data)).catch(err => {
             console.error(err);
             renderRuns([], 'Unable to load runs.');
-          })
+          }),
+          updateProcessStatus().catch(() => {})
         ]);
         const now = new Date();
         el.updatedLabel.textContent = now.toLocaleTimeString();
@@ -762,7 +1076,18 @@
         refreshAll();
         scheduleNextRefresh();
       });
-
+      el.killBtn.addEventListener('click', killSelectedExecutable);
+      el.clearSelection.addEventListener('click', () => {
+        state.hiddenRuns.clear();
+        updateSelectionChip();
+        document.querySelectorAll('.card').forEach(card => {
+          card.classList.remove('collapsed');
+          card.classList.add('selected');
+          const details = card.querySelector('.card-details');
+          if (details) details.hidden = false;
+        });
+        document.querySelectorAll('.card input[type="checkbox"]').forEach(cb => { cb.checked = true; });
+      });
       startLoop();
     })();
   </script>

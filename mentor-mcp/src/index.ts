@@ -27,6 +27,15 @@ const trainStatusSchema = z.object({
   resultsDir: z.string().optional(),
 });
 
+const processStatusSchema = z.object({
+  resultsDir: z.string().optional(),
+});
+
+const killProcessSchema = z.object({
+  executable: z.string(),
+  resultsDir: z.string().optional(),
+});
+
 
 server.registerTool(
   "health",
@@ -61,6 +70,31 @@ server.registerTool(
       ? `/train-status/${encodeURIComponent(input.runId)}${query}`
       : `/train-status${query}`;
     const json = await getJson<unknown>(path);
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "process-status",
+  {
+    description: "Report mlagents-learn process count and running env executables via mentor-api",
+    inputSchema: processStatusSchema,
+  },
+  async (input) => {
+    const query = buildQuery({ resultsDir: input.resultsDir });
+    const json = await getJson<unknown>(`/process-status${query}`);
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "process-kill",
+  {
+    description: "Kill all running processes for a given executable (mlagents-learn or tracked env executables) via mentor-api",
+    inputSchema: killProcessSchema,
+  },
+  async (input) => {
+    const json = await postJson<unknown>("/process-kill", normalizeBody(input));
     return asText(JSON.stringify(json, null, 2));
   }
 );

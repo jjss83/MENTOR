@@ -66,6 +66,20 @@ app.MapGet("/train-status/{runId}", (string runId, string? resultsDir) =>
     var status = runStore.GetStatus(runId, resultsDir);
     return Results.Ok(status);
 });
+app.MapGet("/process-status", (string? resultsDir) =>
+{
+    var status = ProcessStatusReader.Read(resultsDir);
+    return Results.Ok(status);
+});
+app.MapPost("/process-kill", (KillProcessRequest request) =>
+{
+    var result = ProcessStatusReader.Kill(request);
+    if (result.Errors.Count > 0 && result.KilledProcesses == 0 && result.MatchedProcesses == 0)
+    {
+        return Results.BadRequest(result);
+    }
+    return Results.Ok(result);
+});
 app.MapGet("/tensorboard/start", () =>
 {
     var request = new StartTensorboardRequest(null, null, null, null, null);
@@ -141,6 +155,9 @@ internal sealed record TrainingRequest(string? ResultsDir, string? CondaEnv, int
 internal sealed record CancelRunRequest(string? ResultsDir, string? RunId = null);
 internal sealed record StartTensorboardRequest(string? ResultsDir, string? RunId = null, string? CondaEnv = null, bool? SkipConda = null, int? Port = null);
 internal sealed record StartTensorboardResult(bool Started, bool AlreadyRunning, string? Url, string? Message);
+internal sealed record ProcessStatusPayload(string ResultsDirectory, int MlagentsLearnProcesses, IReadOnlyList<string> KnownEnvExecutables, IReadOnlyList<string> RunningEnvExecutables);
+internal sealed record KillProcessRequest(string Executable, string? ResultsDir);
+internal sealed record KillProcessResult(string RequestedExecutable, int MatchedProcesses, int KilledProcesses, IReadOnlyList<string> TargetProcesses, IReadOnlyList<string> Errors);
 internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl, IReadOnlyList<string>? LogTail)
 {
     public static TrainingStatusPayload FromFiles(string runId, string resultsDirectory)
@@ -602,7 +619,7 @@ internal sealed class TrainingRunStore
 
         return null;
     }
-    private static string ResolveResultsDirectory(string? resultsDirOverride)
+    internal static string ResolveResultsDirectory(string? resultsDirOverride)
     {
         if (!string.IsNullOrWhiteSpace(resultsDirOverride))
         {
@@ -803,5 +820,290 @@ internal sealed record TrainingRunOutcome(int? ExitCode, Exception? Error)
     public bool IsSuccess => Error is null && ExitCode.GetValueOrDefault() == 0;
     public static TrainingRunOutcome FromExitCode(int exitCode) => new(exitCode, null);
     public static TrainingRunOutcome FromError(Exception ex) => new(null, ex);
+}
+internal static class ProcessStatusReader
+{
+    public static ProcessStatusPayload Read(string? resultsDirOverride)
+    {
+        var resultsDirectory = TrainingRunStore.ResolveResultsDirectory(resultsDirOverride);
+        var knownEnvExecutables = DiscoverEnvExecutables(resultsDirectory);
+        var (mlagentsCount, runningEnvs) = InspectProcesses(knownEnvExecutables);
+        return new ProcessStatusPayload(resultsDirectory, mlagentsCount, knownEnvExecutables, runningEnvs);
+    }
+
+    public static KillProcessResult Kill(KillProcessRequest request)
+    {
+        var errors = new List<string>();
+        if (request is null || string.IsNullOrWhiteSpace(request.Executable))
+        {
+            errors.Add("Executable is required.");
+            return new KillProcessResult(string.Empty, 0, 0, Array.Empty<string>(), errors);
+        }
+
+        var normalizedTarget = NormalizeExecutableName(request.Executable);
+        if (string.IsNullOrWhiteSpace(normalizedTarget))
+        {
+            errors.Add("Executable is required.");
+            return new KillProcessResult(string.Empty, 0, 0, Array.Empty<string>(), errors);
+        }
+
+        var resultsDirectory = TrainingRunStore.ResolveResultsDirectory(request.ResultsDir);
+        var knownEnvExecutables = DiscoverEnvExecutables(resultsDirectory);
+        var allowedTargets = BuildAllowedTargets(knownEnvExecutables);
+        if (!allowedTargets.Contains(normalizedTarget))
+        {
+            var allowedLabel = allowedTargets.Count == 0 ? "mlagents-learn.exe" : string.Join(", ", allowedTargets.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+            errors.Add($"Executable '{normalizedTarget}' is not recognized. Allowed: {allowedLabel}");
+            return new KillProcessResult(normalizedTarget, 0, 0, Array.Empty<string>(), errors);
+        }
+
+        var (targetFileName, targetBaseName) = NormalizeTargetParts(normalizedTarget);
+        var matched = 0;
+        var killed = 0;
+        var targetProcesses = new List<string>();
+
+        foreach (var process in Process.GetProcesses())
+        {
+            try
+            {
+                if (!MatchesTarget(process, targetFileName, targetBaseName))
+                {
+                    continue;
+                }
+
+                matched++;
+                targetProcesses.Add($"{SafeGetProcessName(process) ?? "<unknown>"} (PID {process.Id})");
+                process.Kill(entireProcessTree: true);
+                killed++;
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"PID {process.Id}: {ex.Message}");
+            }
+            finally
+            {
+                try
+                {
+                    process.Dispose();
+                }
+                catch
+                {
+                    // ignore dispose failures
+                }
+            }
+        }
+
+        return new KillProcessResult(normalizedTarget, matched, killed, targetProcesses, errors);
+    }
+
+    private static IReadOnlyList<string> DiscoverEnvExecutables(string resultsDirectory)
+    {
+        if (!Directory.Exists(resultsDirectory))
+        {
+            return Array.Empty<string>();
+        }
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var runDirectory in Directory.EnumerateDirectories(resultsDirectory))
+        {
+            var metadata = TrainingRunMetadata.TryLoad(runDirectory);
+            if (metadata is null || string.IsNullOrWhiteSpace(metadata.EnvPath))
+            {
+                continue;
+            }
+
+            var envPath = metadata.EnvPath.Trim();
+            if (!envPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var fileName = Path.GetFileName(envPath);
+            if (!string.IsNullOrWhiteSpace(fileName))
+            {
+                names.Add(fileName);
+            }
+        }
+
+        return names.ToArray();
+    }
+
+    private static (int mlagentsCount, IReadOnlyList<string> runningEnvExecutables) InspectProcesses(IReadOnlyCollection<string> envExeNames)
+    {
+        var mlagentsCount = 0;
+        var runningEnvNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var envFileNames = new HashSet<string>(envExeNames, StringComparer.OrdinalIgnoreCase);
+        var envBaseNames = envExeNames
+            .Select(name => new { Base = Path.GetFileNameWithoutExtension(name), Full = name })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Base) && !string.IsNullOrWhiteSpace(x.Full))
+            .ToDictionary(x => x.Base!, x => x.Full!, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var process in Process.GetProcesses())
+        {
+            try
+            {
+                var processName = SafeGetProcessName(process);
+                if (!string.IsNullOrWhiteSpace(processName) && string.Equals(processName, "mlagents-learn", StringComparison.OrdinalIgnoreCase))
+                {
+                    mlagentsCount++;
+                }
+
+                if (envBaseNames.Count == 0 && envFileNames.Count == 0)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(processName) && envBaseNames.TryGetValue(processName, out var canonical))
+                {
+                    runningEnvNames.Add(canonical);
+                    continue;
+                }
+
+                var moduleFile = SafeGetMainModuleFile(process);
+                if (string.IsNullOrWhiteSpace(moduleFile))
+                {
+                    continue;
+                }
+
+                var fileName = Path.GetFileName(moduleFile);
+                if (string.IsNullOrWhiteSpace(fileName))
+                {
+                    continue;
+                }
+
+                if (envFileNames.Contains(fileName))
+                {
+                    runningEnvNames.Add(fileName);
+                    continue;
+                }
+
+                var baseName = Path.GetFileNameWithoutExtension(fileName);
+                if (!string.IsNullOrWhiteSpace(baseName) && envBaseNames.TryGetValue(baseName, out var mapped))
+                {
+                    runningEnvNames.Add(mapped);
+                }
+            }
+            catch
+            {
+                // Ignore processes that cannot be inspected.
+            }
+            finally
+            {
+                try
+                {
+                    process.Dispose();
+                }
+                catch
+                {
+                    // ignore dispose failures
+                }
+            }
+        }
+
+        return (mlagentsCount, runningEnvNames.ToArray());
+    }
+
+    private static HashSet<string> BuildAllowedTargets(IEnumerable<string> knownEnvExecutables)
+    {
+        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "mlagents-learn",
+            "mlagents-learn.exe"
+        };
+
+        foreach (var env in knownEnvExecutables)
+        {
+            var fileName = Path.GetFileName(env);
+            if (!string.IsNullOrWhiteSpace(fileName))
+            {
+                allowed.Add(fileName);
+            }
+
+            var baseName = Path.GetFileNameWithoutExtension(env);
+            if (!string.IsNullOrWhiteSpace(baseName))
+            {
+                allowed.Add(baseName);
+            }
+        }
+
+        return allowed;
+    }
+
+    private static string NormalizeExecutableName(string executable)
+    {
+        var fileName = Path.GetFileName(executable.Trim());
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return string.Empty;
+        }
+
+        return fileName;
+    }
+
+    private static (string fileName, string baseName) NormalizeTargetParts(string executable)
+    {
+        var fileName = NormalizeExecutableName(executable);
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        return (fileName, string.IsNullOrWhiteSpace(baseName) ? fileName : baseName);
+    }
+
+    private static bool MatchesTarget(Process process, string targetFileName, string targetBaseName)
+    {
+        var processName = SafeGetProcessName(process);
+        if (!string.IsNullOrWhiteSpace(processName) && string.Equals(processName, targetBaseName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var moduleFile = SafeGetMainModuleFile(process);
+        if (string.IsNullOrWhiteSpace(moduleFile))
+        {
+            return false;
+        }
+
+        var fileName = Path.GetFileName(moduleFile);
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return false;
+        }
+
+        if (string.Equals(fileName, targetFileName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        if (!string.IsNullOrWhiteSpace(baseName) && string.Equals(baseName, targetBaseName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string? SafeGetProcessName(Process process)
+    {
+        try
+        {
+            return process.ProcessName;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? SafeGetMainModuleFile(Process process)
+    {
+        try
+        {
+            return process.MainModule?.FileName;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }
 
