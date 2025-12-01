@@ -41,7 +41,7 @@ Swagger exposes example payloads for each endpoint when you browse `http://local
 | --- | --- | --- |
 | `envPath` | string | Full path to your Unity environment executable (`.exe`). Optional when you'll launch the Unity Editor yourself or when resuming with a stored path. |
 | `config` | string | Path to the ML-Agents trainer YAML file. Defaults to `config/ppo/3DBall.yaml`. |
-| `runId` | string | Optional custom run identifier; otherwise a timestamped ID is generated. |
+| `runId` | string | Optional custom run identifier; otherwise `rt-YYMMDD-<n>` is generated (UTC date with a daily counter). |
 | `resultsDir` | string | Directory where ML-Agents will write training artifacts. Defaults to `X:/workspace/MENTOR/ml-agents-training-results`. |
 | `condaEnv` | string | Name of the Conda env that contains ML-Agents (`mlagents` by default). |
 | `basePort` | int | Port offset for environment launches; if omitted, a free block is auto-selected starting at 5005 so multiple runs can coexist. |
@@ -89,17 +89,17 @@ Three ready-to-use payloads for common scenarios:
 
 ## Query Training Status
 - All runs: `GET /train-status?resultsDir=X:/workspace/MENTOR/ml-agents-training-results`
-- Specific run: `GET /train-status/run-3DBall-2024-08-10-153000?resultsDir=X:/workspace/MENTOR/ml-agents-training-results`
+- Specific run: `GET /train-status/rt-241201-1?resultsDir=X:/workspace/MENTOR/ml-agents-training-results`
 
 Example response for a single run:
 ```json
 {
-  "runId": "run-3DBall-2024-08-10-153000",
+  "runId": "rt-241201-1",
   "status": "running",
   "completed": false,
   "exitCode": null,
   "resultsDirectory": "X:/workspace/MENTOR/ml-agents-training-results",
-  "trainingStatusPath": "X:/workspace/MENTOR/ml-agents-training-results/run-3DBall-2024-08-10-153000/run_logs/training_status.json",
+  "trainingStatusPath": "X:/workspace/MENTOR/ml-agents-training-results/rt-241201-1/run_logs/training_status.json",
   "message": null,
   "tensorboardUrl": "http://localhost:6006"
 }

@@ -262,6 +262,17 @@ internal sealed class TrainingRunStore
     private const int BasePortBlockSize = 20;
     private const int BasePortStride = BasePortBlockSize;
     private const int MaxBasePortProbes = 200;
+    private static readonly HashSet<string> AllowedTrainingProcessNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "mlagents-learn",
+        "mlagents-learn.exe",
+        "conda",
+        "conda.exe",
+        "python",
+        "python.exe",
+        "python3",
+        "python3.exe"
+    };
     private readonly Dictionary<string, TrainingRunState> _runs = new();
     private readonly Dictionary<string, TensorboardInstance> _tensorboards = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _syncRoot = new();
@@ -597,6 +608,13 @@ internal sealed class TrainingRunStore
                 log?.Invoke(skipped);
                 continue;
             }
+            if (IsKnownTrainingProcessAlive(metadata.ProcessId))
+            {
+                var skipped = $"Skipped '{runId}' because PID {metadata.ProcessId} is still running; not starting another instance.";
+                messages.Add(skipped);
+                log?.Invoke(skipped);
+                continue;
+            }
             if (!string.IsNullOrWhiteSpace(metadata.EnvPath))
             {
                 if (!File.Exists(metadata.EnvPath) || !string.Equals(Path.GetExtension(metadata.EnvPath), ".exe", StringComparison.OrdinalIgnoreCase))
@@ -887,6 +905,47 @@ internal sealed class TrainingRunStore
         var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         return string.Equals(name, ArchiveFolderName, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool IsKnownTrainingProcessAlive(int? pid)
+    {
+        if (!pid.HasValue || pid.Value <= 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(pid.Value);
+            if (process.HasExited)
+            {
+                return false;
+            }
+
+            var name = SafeGetProcessName(process);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return true;
+            }
+
+            return AllowedTrainingProcessNames.Contains(name);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string? SafeGetProcessName(Process process)
+    {
+        try
+        {
+            return process.ProcessName;
+        }
+        catch
+        {
+            return null;
+        }
+    }
     private static bool IsPathUnderDirectory(string path, string parentDirectory)
     {
         if (string.IsNullOrWhiteSpace(parentDirectory))
@@ -1021,7 +1080,30 @@ internal sealed class TrainingRunState
         var outputStream = new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
         var outputWriter = new StreamWriter(outputStream)
         { AutoFlush = true };
-        var runner = new TrainingSessionRunner(options, outputWriter, outputWriter, outputStream, outputStream, enableConsoleCancel: false);
+        var runner = new TrainingSessionRunner(
+            options,
+            outputWriter,
+            outputWriter,
+            outputStream,
+            outputStream,
+            enableConsoleCancel: false,
+            tensorboardPort: null,
+            onProcessStarted: pid =>
+            {
+                try
+                {
+                    var existing = TrainingRunMetadata.TryLoad(runDirectory);
+                    var metadataToSave = existing is null
+                        ? new TrainingRunMetadata(options.EnvExecutablePath, options.TrainerConfigPath, options.RunId, options.ResultsDirectory, options.CondaEnvironmentName, options.BasePort, options.NoGraphics, options.SkipConda, options.LaunchTensorBoard, ResumeOnStart: false, ProcessId: pid)
+                        : existing with { ProcessId = pid };
+
+                    TrainingRunMetadata.Save(runDirectory, metadataToSave);
+                }
+                catch
+                {
+                    // Best-effort; if persisting PID fails we still run training.
+                }
+            });
         var runTask = Task.Run(async () =>
         {
             try
@@ -1087,12 +1169,12 @@ internal sealed class TrainingRunState
         return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message, TensorboardUrl, LogPath, logTail, parameters, resumeOnStart);
     }
 }
-internal sealed record TrainingRunMetadata(string? EnvPath, string ConfigPath, string RunId, string ResultsDirectory, string CondaEnvironmentName, int? BasePort, bool NoGraphics, bool SkipConda, bool LaunchTensorboard, bool ResumeOnStart = false)
+internal sealed record TrainingRunMetadata(string? EnvPath, string ConfigPath, string RunId, string ResultsDirectory, string CondaEnvironmentName, int? BasePort, bool NoGraphics, bool SkipConda, bool LaunchTensorboard, bool ResumeOnStart = false, int? ProcessId = null)
 {
     private const string MetadataFileName = "run_metadata.json";
     public static void Save(string runDirectory, TrainingOptions options)
     {
-        var metadata = new TrainingRunMetadata(options.EnvExecutablePath, options.TrainerConfigPath, options.RunId, options.ResultsDirectory, options.CondaEnvironmentName, options.BasePort, options.NoGraphics, options.SkipConda, options.LaunchTensorBoard, ResumeOnStart: false);
+        var metadata = new TrainingRunMetadata(options.EnvExecutablePath, options.TrainerConfigPath, options.RunId, options.ResultsDirectory, options.CondaEnvironmentName, options.BasePort, options.NoGraphics, options.SkipConda, options.LaunchTensorBoard, ResumeOnStart: false, ProcessId: null);
         Save(runDirectory, metadata);
     }
     public static void Save(string runDirectory, TrainingRunMetadata metadata)

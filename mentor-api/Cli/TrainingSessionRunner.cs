@@ -25,6 +25,7 @@ internal sealed class TrainingSessionRunner
     private readonly int? _tensorboardPort;
     private readonly int _basePort;
     private readonly string? _basePortMessage;
+    private readonly Action<int>? _onProcessStarted;
     private Process? _mlAgentsProcess;
     private bool _cancelRequested;
     private bool _reuseExistingTensorboard;
@@ -35,7 +36,9 @@ internal sealed class TrainingSessionRunner
         TextWriter? errorWriter = null,
         Stream? standardOutput = null,
         Stream? standardError = null,
-        bool enableConsoleCancel = true, int? tensorboardPort = null)
+        bool enableConsoleCancel = true,
+        int? tensorboardPort = null,
+        Action<int>? onProcessStarted = null)
     {
         _options = options;
         _outputWriter = outputWriter ?? Console.Out;
@@ -45,6 +48,7 @@ internal sealed class TrainingSessionRunner
         _enableConsoleCancel = enableConsoleCancel;
         _tensorboardPort = _options.LaunchTensorBoard ? DetermineTensorboardPort(tensorboardPort) : tensorboardPort;
         _basePort = ResolveBasePort(out _basePortMessage);
+        _onProcessStarted = onProcessStarted;
     }
 
     public string? TensorboardUrl => _tensorboardPort.HasValue ? $"http://localhost:{_tensorboardPort.Value}" : null;
@@ -135,6 +139,8 @@ internal sealed class TrainingSessionRunner
             {
                 throw new InvalidOperationException("Failed to start ML-Agents training process.");
             }
+
+            _onProcessStarted?.Invoke(process.Id);
 
             var outputPump = PumpStreamAsync(process.StandardOutput.BaseStream, _standardOutput);
             var errorPump = PumpStreamAsync(process.StandardError.BaseStream, _standardError);
