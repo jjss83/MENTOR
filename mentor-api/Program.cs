@@ -1090,7 +1090,9 @@ internal static class ProcessStatusReader
         var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "mlagents-learn",
-            "mlagents-learn.exe"
+            "mlagents-learn.exe",
+            "tensorboard",
+            "tensorboard.exe"
         };
 
         foreach (var env in knownEnvExecutables)

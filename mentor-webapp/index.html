@@ -800,6 +800,7 @@
         const runId = pick(run, 'runId') || 'Unknown run';
         const runParams = pick(run, 'parameters') || {};
         const resumeFlag = pick(run, 'resumeOnStart') ?? pick(runParams, 'resumeOnStart');
+        const isCompleted = !!pick(run, 'completed');
         const logPath = deriveLogPath(run);
         const logUrl = toFileUrl(logPath) ?? logPath;
         const selection = document.createElement('input');
@@ -867,12 +868,21 @@
         resumeControl.style.gap = '8px';
         const resumeToggle = document.createElement('input');
         resumeToggle.type = 'checkbox';
-        resumeToggle.checked = !!resumeFlag;
+        resumeToggle.checked = isCompleted ? false : !!resumeFlag;
         resumeToggle.addEventListener('click', (event) => event.stopPropagation());
         const resumeNote = document.createElement('div');
         resumeNote.className = 'pill-label';
-        resumeNote.textContent = resumeToggle.checked ? 'Will resume automatically' : 'Disabled by default';
+        if (isCompleted) {
+          resumeToggle.disabled = true;
+          resumeNote.textContent = 'Completed runs cannot auto-resume';
+        } else {
+          resumeNote.textContent = resumeToggle.checked ? 'Will resume automatically' : 'Disabled by default';
+        }
         resumeToggle.addEventListener('change', async (event) => {
+          if (isCompleted) {
+            event.preventDefault();
+            return;
+          }
           const desired = event.target.checked;
           resumeToggle.disabled = true;
           resumeNote.textContent = desired ? 'Marking...' : 'Updating...';
@@ -1066,7 +1076,7 @@
       function updateKillOptions(knownList) {
         const select = el.killSelect;
         const previous = select.value;
-        const options = ['mlagents-learn.exe', ...new Set(Array.isArray(knownList) ? knownList : [])];
+        const options = ['mlagents-learn.exe', 'tensorboard', ...new Set(Array.isArray(knownList) ? knownList : [])];
         select.innerHTML = '<option value="">Select executable</option>';
         options.forEach(name => {
           const opt = document.createElement('option');
