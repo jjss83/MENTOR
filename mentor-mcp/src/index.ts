@@ -36,6 +36,19 @@ const killProcessSchema = z.object({
   resultsDir: z.string().optional(),
 });
 
+const resumeFlagSchema = z.object({
+  runId: z.string(),
+  resumeOnStart: z.boolean(),
+  resultsDir: z.string().optional(),
+});
+
+const tensorboardStartSchema = z.object({
+  resultsDir: z.string().optional(),
+  runId: z.string().optional(),
+  condaEnv: z.string().optional(),
+  skipConda: z.boolean().optional(),
+  port: z.number().int().optional(),
+});
 
 server.registerTool(
   "health",
@@ -99,6 +112,37 @@ server.registerTool(
   }
 );
 
+server.registerTool(
+  "resume-flag",
+  {
+    description: "Update resume-on-start flag for a training run via mentor-api",
+    inputSchema: resumeFlagSchema,
+  },
+  async (input) => {
+    const json = await postJson<unknown>("/train/resume-flag", normalizeBody(input));
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "tensorboard-start",
+  {
+    description: "Start TensorBoard via mentor-api (uses defaults if no arguments are provided)",
+    inputSchema: tensorboardStartSchema,
+  },
+  async (input) => {
+    const query = buildQuery({
+      resultsDir: input.resultsDir,
+      runId: input.runId,
+      condaEnv: input.condaEnv,
+      skipConda: input.skipConda,
+      port: input.port,
+    });
+    const json = await getJson<unknown>(`/tensorboard/start${query}`);
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
 server.server.onerror = (error) => {
   console.error("mentor-mcp server error", error);
 };
@@ -122,13 +166,13 @@ function normalizeBody<T extends Record<string, unknown>>(body: T): T {
   return clone as T;
 }
 
-function buildQuery(params: Record<string, string | undefined>): string {
-  const entries = Object.entries(params).filter(([, value]) => value);
+function buildQuery(params: Record<string, string | number | boolean | undefined>): string {
+  const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== null);
   if (!entries.length) {
     return "";
   }
   const search = entries
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value!)}`)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
     .join("&");
   return `?${search}`;
 }

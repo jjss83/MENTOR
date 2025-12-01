@@ -51,6 +51,11 @@ internal sealed class TrainingSessionRunner
 
     public void RequestCancel()
     {
+        if (_cancelRequested)
+        {
+            return;
+        }
+
         _cancelRequested = true;
         TryTerminateProcessTree(_mlAgentsProcess);
     }
@@ -85,15 +90,14 @@ internal sealed class TrainingSessionRunner
             WriteLine();
         }
 
-        var cancelRequested = false;
         ConsoleCancelEventHandler? cancelHandler = null;
         if (_enableConsoleCancel)
         {
             cancelHandler = (_, e) =>
             {
-                if (!cancelRequested)
+                if (!_cancelRequested)
                 {
-                    cancelRequested = true;
+                    _cancelRequested = true;
                     e.Cancel = true;
                     WriteLine("Cancellation requested. Stopping ML-Agents process...");
                     TryTerminateProcessTree(process);
@@ -350,8 +354,13 @@ internal sealed class TrainingSessionRunner
         return "conda";
     }
 
-    private void TryTerminateProcessTree(Process process)
+    private void TryTerminateProcessTree(Process? process)
     {
+        if (process is null)
+        {
+            return;
+        }
+
         try
         {
             if (!process.HasExited)

@@ -28,11 +28,12 @@ if (app.Environment.IsDevelopment())
 }
 app.UseCors();
 var runStore = new TrainingRunStore();
-Console.WriteLine("[Resume] Checking for unfinished training runs...");
+Console.WriteLine("[Resume] Checking for runs marked to resume on start...");
 var resumeMessages = runStore.ResumeUnfinishedRuns(msg => Console.WriteLine($"[Resume] {msg}"));
-if (resumeMessages.Count == 0)
+var resumedAny = resumeMessages.Any(msg => msg.Contains("Resumed", StringComparison.OrdinalIgnoreCase));
+if (!resumedAny)
 {
-    Console.WriteLine("[Resume] No unfinished training runs found.");
+    Console.WriteLine("[Resume] No runs were resumed. Use the web app to mark runs for resume.");
 }
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapPost("/train", (TrainingRequest request) =>
@@ -65,6 +66,19 @@ app.MapGet("/train-status/{runId}", (string runId, string? resultsDir) =>
     }
     var status = runStore.GetStatus(runId, resultsDir);
     return Results.Ok(status);
+});
+app.MapPost("/train/resume-flag", (ResumeFlagRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.RunId))
+    {
+        return Results.BadRequest(new { error = "runId is required." });
+    }
+    var result = runStore.SetResumeOnStart(request.RunId.Trim(), request.ResumeOnStart, request.ResultsDir);
+    if (!result.Success)
+    {
+        return Results.BadRequest(new { error = result.Message ?? "Unable to update resume flag." });
+    }
+    return Results.Ok(new { runId = request.RunId, resumeOnStart = result.ResumeOnStart, message = result.Message });
 });
 app.MapGet("/process-status", (string? resultsDir) =>
 {
@@ -151,32 +165,42 @@ internal sealed record CancelRunResult(CancelRunResultStatus Status, string? Mes
     public static CancelRunResult NotFound(string? message) => new(CancelRunResultStatus.NotFound, message);
     public static CancelRunResult AlreadyCompleted(string? message) => new(CancelRunResultStatus.AlreadyCompleted, message);
 }
+internal sealed record ResumeFlagResult(bool Success, string? Message, bool? ResumeOnStart)
+{
+    public static ResumeFlagResult Invalid(string? message) => new(false, message, null);
+    public static ResumeFlagResult NotFound(string? message) => new(false, message, null);
+    public static ResumeFlagResult Updated(bool resumeOnStart, string? message) => new(true, message, resumeOnStart);
+}
 internal sealed record TrainingRequest(string? ResultsDir, string? CondaEnv, int? BasePort, bool? NoGraphics, bool? SkipConda, bool? Tensorboard, string? EnvPath = null, string? Config = null, string? RunId = null);
 internal sealed record CancelRunRequest(string? ResultsDir, string? RunId = null);
+internal sealed record ResumeFlagRequest(string RunId, bool ResumeOnStart, string? ResultsDir);
 internal sealed record StartTensorboardRequest(string? ResultsDir, string? RunId = null, string? CondaEnv = null, bool? SkipConda = null, int? Port = null);
 internal sealed record StartTensorboardResult(bool Started, bool AlreadyRunning, string? Url, string? Message);
 internal sealed record ProcessStatusPayload(string ResultsDirectory, int MlagentsLearnProcesses, IReadOnlyList<string> KnownEnvExecutables, IReadOnlyList<string> RunningEnvExecutables);
 internal sealed record KillProcessRequest(string Executable, string? ResultsDir);
 internal sealed record KillProcessResult(string RequestedExecutable, int MatchedProcesses, int KilledProcesses, IReadOnlyList<string> TargetProcesses, IReadOnlyList<string> Errors);
-internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl, IReadOnlyList<string>? LogTail)
+internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl, string? LogPath, IReadOnlyList<string>? LogTail, TrainingRunParameters? Parameters, bool ResumeOnStart)
 {
     public static TrainingStatusPayload FromFiles(string runId, string resultsDirectory)
     {
         var trainingStatusPath = TrainingRunStore.BuildTrainingStatusPath(resultsDirectory, runId);
         var logPath = TrainingRunStore.BuildLogPath(resultsDirectory, runId);
         var logTail = TrainingRunStore.ReadLogTail(logPath);
+        var runDirectory = TrainingRunStore.BuildRunDirectory(resultsDirectory, runId);
+        var metadata = TrainingRunMetadata.TryLoad(runDirectory);
+        var parameters = TrainingRunStore.BuildParametersFromMetadata(metadata);
+        var resumeOnStart = metadata?.ResumeOnStart ?? false;
         if (File.Exists(trainingStatusPath))
         {
             var statusText = TryReadStatus(trainingStatusPath);
             var normalized = NormalizeStatus(statusText);
-            return new TrainingStatusPayload(runId, normalized, Completed: true, ExitCode: null, resultsDirectory, trainingStatusPath, null, TensorboardUrl: null, LogTail: logTail);
+            return new TrainingStatusPayload(runId, normalized, Completed: true, ExitCode: null, resultsDirectory, trainingStatusPath, null, TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart);
         }
-        var runDirectory = TrainingRunStore.BuildRunDirectory(resultsDirectory, runId);
         if (Directory.Exists(runDirectory))
         {
-            return new TrainingStatusPayload(runId, Status: "unknown", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, "Run directory exists but training_status.json has not been written yet.", TensorboardUrl: null, LogTail: logTail);
+            return new TrainingStatusPayload(runId, Status: "unknown", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, "Run directory exists but training_status.json has not been written yet.", TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart);
         }
-        return new TrainingStatusPayload(runId, Status: "not-found", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, $"No run data found at '{runDirectory}'.", TensorboardUrl: null, LogTail: logTail);
+        return new TrainingStatusPayload(runId, Status: "not-found", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, $"No run data found at '{runDirectory}'.", TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart);
     }
     private static string NormalizeStatus(string? status)
     {
@@ -196,6 +220,7 @@ internal sealed record TrainingStatusPayload(string RunId, string Status, bool C
         }
     }
 }
+internal sealed record TrainingRunParameters(string? EnvPath, string? ConfigPath, string? CondaEnv, bool? NoGraphics, bool? SkipConda, bool? Tensorboard, int? BasePort, bool? HasEnvExecutable, bool ResumeOnStart);
 internal sealed record TrainingStartResult(bool IsStarted, TrainingRunState? Run, string? Message)
 {
     public static TrainingStartResult Started(TrainingRunState run) => new(true, run, null);
@@ -224,6 +249,27 @@ internal sealed class TrainingRunStore
             run.Cancel();
             return CancelRunResult.Success();
         }
+    }
+    public ResumeFlagResult SetResumeOnStart(string runId, bool resumeOnStart, string? resultsDirOverride)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return ResumeFlagResult.Invalid("runId is required.");
+        }
+
+        var resultsDir = ResolveResultsDirectory(resultsDirOverride);
+        var runDirectory = BuildRunDirectory(resultsDir, runId);
+        var metadata = TrainingRunMetadata.TryLoad(runDirectory);
+        if (metadata is null)
+        {
+            return ResumeFlagResult.NotFound($"No run metadata found for '{runId}' in '{resultsDir}'.");
+        }
+
+        var updated = metadata with { ResumeOnStart = resumeOnStart };
+        TrainingRunMetadata.Save(runDirectory, updated);
+
+        var message = resumeOnStart ? $"Run '{runId}' marked to resume on next API start." : $"Run '{runId}' will not automatically resume.";
+        return ResumeFlagResult.Updated(resumeOnStart, message);
     }
     public TrainingStartResult TryStart(TrainingOptions options)
     {
@@ -383,6 +429,13 @@ internal sealed class TrainingRunStore
             if (metadata is null)
             {
                 var skipped = $"Skipped '{runId}' because run_metadata.json is missing or unreadable.";
+                messages.Add(skipped);
+                log?.Invoke(skipped);
+                continue;
+            }
+            if (!metadata.ResumeOnStart)
+            {
+                var skipped = $"Skipped '{runId}' because it is not marked to resume on start.";
                 messages.Add(skipped);
                 log?.Invoke(skipped);
                 continue;
@@ -641,6 +694,24 @@ internal sealed class TrainingRunStore
             return TrainingOptions.DefaultResultsDirectory;
         }
     }
+    internal static TrainingRunParameters? BuildParametersFromOptions(TrainingOptions? options)
+    {
+        if (options is null)
+        {
+            return null;
+        }
+        var envPath = options.EnvExecutablePath;
+        return new TrainingRunParameters(envPath, options.TrainerConfigPath, options.CondaEnvironmentName, options.NoGraphics, options.SkipConda, options.LaunchTensorBoard, options.BasePort, HasEnvExecutable: !string.IsNullOrWhiteSpace(envPath), ResumeOnStart: false);
+    }
+    internal static TrainingRunParameters? BuildParametersFromMetadata(TrainingRunMetadata? metadata)
+    {
+        if (metadata is null)
+        {
+            return null;
+        }
+        var envPath = metadata.EnvPath;
+        return new TrainingRunParameters(envPath, metadata.ConfigPath, metadata.CondaEnvironmentName, metadata.NoGraphics, metadata.SkipConda, metadata.LaunchTensorboard, metadata.BasePort, HasEnvExecutable: !string.IsNullOrWhiteSpace(envPath), ResumeOnStart: metadata.ResumeOnStart);
+    }
     internal static string BuildLogPath(string resultsDirectory, string runId)
     {
         return Path.Combine(resultsDirectory, runId, "run_logs", "mentor-api.log");
@@ -694,8 +765,9 @@ internal sealed class TrainingRunState
     public string LogPath { get; }
     public string? TensorboardUrl { get; }
     public int? BasePort { get; }
+    public TrainingOptions Options { get; }
     public Task<TrainingRunOutcome> RunTask { get; }
-    private TrainingRunState(string runId, string resultsDirectory, string logPath, string? tensorboardUrl, int? basePort, Task<TrainingRunOutcome> runTask, TrainingSessionRunner runner)
+    private TrainingRunState(string runId, string resultsDirectory, string logPath, string? tensorboardUrl, int? basePort, Task<TrainingRunOutcome> runTask, TrainingSessionRunner runner, TrainingOptions options)
     {
         RunId = runId;
         ResultsDirectory = resultsDirectory;
@@ -705,6 +777,7 @@ internal sealed class TrainingRunState
         RunTask = runTask;
         _runner = runner;
         _cancelRequested = false;
+        Options = options;
     }
     public static TrainingRunState StartNew(TrainingOptions options)
     {
@@ -737,7 +810,7 @@ internal sealed class TrainingRunState
                 await outputStream.DisposeAsync().ConfigureAwait(false);
             }
         });
-        return new TrainingRunState(options.RunId, options.ResultsDirectory, logPath, options.LaunchTensorBoard ? "http://localhost:6006" : null, options.BasePort, runTask, runner);
+        return new TrainingRunState(options.RunId, options.ResultsDirectory, logPath, options.LaunchTensorBoard ? "http://localhost:6006" : null, options.BasePort, runTask, runner, options);
     }
     public bool IsCompleted => RunTask.IsCompleted;
     public void Cancel()
@@ -775,17 +848,25 @@ internal sealed class TrainingRunState
         }
         var completed = status != "running";
         var logTail = TrainingRunStore.ReadLogTail(LogPath);
-        return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message, TensorboardUrl, logTail);
+        var runDirectory = TrainingRunStore.BuildRunDirectory(ResultsDirectory, RunId);
+        var metadata = TrainingRunMetadata.TryLoad(runDirectory);
+        var parameters = TrainingRunStore.BuildParametersFromMetadata(metadata) ?? TrainingRunStore.BuildParametersFromOptions(Options);
+        var resumeOnStart = metadata?.ResumeOnStart ?? false;
+        return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message, TensorboardUrl, LogPath, logTail, parameters, resumeOnStart);
     }
 }
-internal sealed record TrainingRunMetadata(string? EnvPath, string ConfigPath, string RunId, string ResultsDirectory, string CondaEnvironmentName, int? BasePort, bool NoGraphics, bool SkipConda, bool LaunchTensorboard)
+internal sealed record TrainingRunMetadata(string? EnvPath, string ConfigPath, string RunId, string ResultsDirectory, string CondaEnvironmentName, int? BasePort, bool NoGraphics, bool SkipConda, bool LaunchTensorboard, bool ResumeOnStart = false)
 {
     private const string MetadataFileName = "run_metadata.json";
     public static void Save(string runDirectory, TrainingOptions options)
     {
+        var metadata = new TrainingRunMetadata(options.EnvExecutablePath, options.TrainerConfigPath, options.RunId, options.ResultsDirectory, options.CondaEnvironmentName, options.BasePort, options.NoGraphics, options.SkipConda, options.LaunchTensorBoard, ResumeOnStart: false);
+        Save(runDirectory, metadata);
+    }
+    public static void Save(string runDirectory, TrainingRunMetadata metadata)
+    {
         var metadataPath = BuildMetadataPath(runDirectory);
         Directory.CreateDirectory(Path.GetDirectoryName(metadataPath)!);
-        var metadata = new TrainingRunMetadata(options.EnvExecutablePath, options.TrainerConfigPath, options.RunId, options.ResultsDirectory, options.CondaEnvironmentName, options.BasePort, options.NoGraphics, options.SkipConda, options.LaunchTensorBoard);
         var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(metadataPath, json);
     }

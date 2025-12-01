@@ -370,6 +370,15 @@
       max-height: var(--log-height);
       overflow: hidden;
     }
+    .log-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 6px;
+    }
+    .log-actions button {
+      padding: 8px 12px;
+      border-radius: 10px;
+    }
     .empty {
       text-align: center;
       padding: 18px;
@@ -450,8 +459,9 @@
     <main>
       <section id="tensorboard-embed" class="embed-card" hidden>
         <div class="section-head">
-          <div class="section-title">TensorBoard — Environment / Cumulative Reward</div>
+          <div class="section-title">TensorBoard - Environment / Cumulative Reward</div>
           <div class="section-note" id="tensorboard-note"></div>
+          <button id="start-tensorboard" class="secondary">Start TensorBoard</button>
         </div>
         <div class="embed-frame">
           <iframe id="tensorboard-frame" title="TensorBoard Environment Cumulative Reward"></iframe>
@@ -531,6 +541,8 @@
         knownEnvExecutables: [],
         hiddenRuns: new Set(),
         lastRuns: [],
+        tensorboardUrl: null,
+        forceTensorboardReload: false,
       };
 
       const defaultTensorboardUrl = 'http://localhost:6006/';
@@ -565,6 +577,7 @@
         tbSection: document.getElementById('tensorboard-embed'),
         tbFrame: document.getElementById('tensorboard-frame'),
         tbNote: document.getElementById('tensorboard-note'),
+        tbStart: document.getElementById('start-tensorboard'),
         runGrid: document.getElementById('run-grid'),
         runsNote: document.getElementById('runs-note'),
         selectionChip: document.getElementById('selection-chip'),
@@ -632,6 +645,39 @@
         el.logHeightSlider.value = value;
         el.logHeightValue.textContent = value;
         document.documentElement.style.setProperty('--log-height', `${value}px`);
+      }
+
+      function deriveLogPath(run) {
+        const direct = pick(run, 'logPath');
+        if (direct) return direct;
+
+        const statusPath = pick(run, 'trainingStatusPath');
+        if (statusPath) {
+          const base = statusPath.replace(/training_status\.json$/i, '').replace(/[\\/]+$/, '');
+          if (base) {
+            return `${base}/mentor-api.log`;
+          }
+        }
+
+        const resultsDir = pick(run, 'resultsDirectory');
+        const runId = pick(run, 'runId');
+        if (resultsDir && runId) {
+          return [resultsDir, runId, 'run_logs', 'mentor-api.log'].join('/');
+        }
+
+        return null;
+      }
+
+      function toFileUrl(path) {
+        if (!path) return null;
+        const normalized = path.replace(/\\/g, '/');
+        if (/^[a-zA-Z]:\//.test(normalized)) {
+          return `file:///${encodeURI(normalized)}`;
+        }
+        if (normalized.startsWith('/')) {
+          return `file://${encodeURI(normalized)}`;
+        }
+        return null;
       }
 
       async function fetchJson(url) {
@@ -742,7 +788,7 @@
 
         setCounts(list);
         el.runsNote.textContent = `${list.length} run${list.length === 1 ? '' : 's'} tracked`;
-        renderTensorboard(list);
+        renderTensorboard(list, state.forceTensorboardReload);
         updateSelectionChip();
       }
 
@@ -752,6 +798,10 @@
         const header = document.createElement('div');
         header.className = 'card-header';
         const runId = pick(run, 'runId') || 'Unknown run';
+        const runParams = pick(run, 'parameters') || {};
+        const resumeFlag = pick(run, 'resumeOnStart') ?? pick(runParams, 'resumeOnStart');
+        const logPath = deriveLogPath(run);
+        const logUrl = toFileUrl(logPath) ?? logPath;
         const selection = document.createElement('input');
         selection.type = 'checkbox';
         selection.ariaLabel = `Show details for ${runId}`;
@@ -787,15 +837,82 @@
         metaRow.className = 'meta-row';
         metaRow.append(
           createMeta('Results', pick(run, 'resultsDirectory') || '-'),
-          createMeta('Exit code', pick(run, 'exitCode') ?? '-'),
-          createMeta('TensorBoard', pick(run, 'tensorboardUrl') || '-')
+          createMeta('Training status', pick(run, 'trainingStatusPath') || '-'),
+          createMeta('TensorBoard URL', pick(run, 'tensorboardUrl') || '-'),
+          createMeta('Log path', logPath || '-'),
+          createMeta('Exit code', pick(run, 'exitCode') ?? '-')
         );
+
+        const paramsRow = document.createElement('div');
+        paramsRow.className = 'meta-row';
+        paramsRow.append(
+          createMeta('Env path', pick(runParams, 'envPath') || '-'),
+          createMeta('Config', pick(runParams, 'configPath') || '-'),
+          createMeta('Conda env', pick(runParams, 'condaEnv') || '-'),
+          createMeta('Base port', pick(runParams, 'basePort') ?? '-'),
+          createMeta('Graphics', formatFlag(pick(runParams, 'noGraphics'), 'No graphics', 'Graphics enabled')),
+          createMeta('Env executable', formatFlag(pick(runParams, 'hasEnvExecutable'), 'Yes', 'No')),
+          createMeta('Skip conda', formatFlag(pick(runParams, 'skipConda'), 'Skip', 'Use conda')),
+          createMeta('Launch TensorBoard', formatFlag(pick(runParams, 'tensorboard'), 'Yes', 'No')),
+          createMeta('Resume on start', formatFlag(resumeFlag, 'Resume enabled', 'Start fresh'))
+        );
+        const resumeRow = document.createElement('div');
+        resumeRow.className = 'meta';
+        const resumeLabel = document.createElement('div');
+        resumeLabel.className = 'label';
+        resumeLabel.textContent = 'Resume on API start';
+        const resumeControl = document.createElement('div');
+        resumeControl.style.display = 'flex';
+        resumeControl.style.alignItems = 'center';
+        resumeControl.style.gap = '8px';
+        const resumeToggle = document.createElement('input');
+        resumeToggle.type = 'checkbox';
+        resumeToggle.checked = !!resumeFlag;
+        resumeToggle.addEventListener('click', (event) => event.stopPropagation());
+        const resumeNote = document.createElement('div');
+        resumeNote.className = 'pill-label';
+        resumeNote.textContent = resumeToggle.checked ? 'Will resume automatically' : 'Disabled by default';
+        resumeToggle.addEventListener('change', async (event) => {
+          const desired = event.target.checked;
+          resumeToggle.disabled = true;
+          resumeNote.textContent = desired ? 'Marking...' : 'Updating...';
+          try {
+            await postJson(`${state.apiBase}/train/resume-flag`, { runId, resumeOnStart: desired, resultsDir: pick(run, 'resultsDirectory') });
+            resumeNote.textContent = desired ? 'Will resume automatically' : 'Will not auto-resume';
+            await refreshAll();
+          } catch (err) {
+            console.error(err);
+            resumeToggle.checked = !desired;
+            resumeNote.textContent = err?.message || 'Failed to update';
+          } finally {
+            resumeToggle.disabled = false;
+          }
+        });
+        resumeControl.append(resumeToggle, resumeNote);
+        resumeRow.append(resumeLabel, resumeControl);
 
         const log = document.createElement('div');
         log.className = 'log';
         const logTail = pick(run, 'logTail');
         const logs = Array.isArray(logTail) ? logTail.filter(Boolean) : [];
         log.textContent = logs.length ? logs.join('\n') : 'Waiting for log output...';
+        const logActions = document.createElement('div');
+        logActions.className = 'log-actions';
+        const openLogBtn = document.createElement('button');
+        openLogBtn.type = 'button';
+        openLogBtn.className = 'secondary';
+        openLogBtn.textContent = 'Open full log';
+        openLogBtn.title = logPath || 'Log path unavailable';
+        openLogBtn.disabled = !logUrl;
+        openLogBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          if (logUrl) {
+            window.open(logUrl, '_blank', 'noopener,noreferrer');
+          } else {
+            alert('Log path unavailable for this run.');
+          }
+        });
+        logActions.append(openLogBtn);
 
         const detailsWrap = document.createElement('div');
         detailsWrap.className = 'card-details';
@@ -809,9 +926,9 @@
           const text = document.createElement('div');
           text.textContent = message;
           msg.append(labelEl, text);
-          detailsWrap.append(metaRow, msg, log);
+          detailsWrap.append(metaRow, paramsRow, resumeRow, msg, log, logActions);
         } else {
-          detailsWrap.append(metaRow, log);
+          detailsWrap.append(metaRow, paramsRow, resumeRow, log, logActions);
         }
 
         detailsWrap.hidden = !detailsVisible;
@@ -828,6 +945,12 @@
           toggleRunSelection(runId, next);
         });
         return card;
+      }
+
+      function formatFlag(value, truthyLabel = 'Yes', falsyLabel = 'No') {
+        if (value === true) return truthyLabel;
+        if (value === false) return falsyLabel;
+        return '-';
       }
 
       function createMeta(label, value) {
@@ -863,7 +986,7 @@
         });
       }
 
-      function renderTensorboard(runs) {
+      function renderTensorboard(runs, forceReload = false) {
         const list = Array.isArray(runs) ? runs : [];
         const withTb = list.find(r => pick(r, 'tensorboardUrl'));
         const url = withTb ? pick(withTb, 'tensorboardUrl') : defaultTensorboardUrl;
@@ -871,14 +994,48 @@
         if (!url) {
           el.tbSection.hidden = true;
           el.tbFrame.removeAttribute('src');
+          state.tensorboardUrl = null;
           return;
         }
         const current = el.tbFrame.getAttribute('src');
-        if (current !== url) {
+        const shouldReload = forceReload || current !== url;
+        if (shouldReload) {
+          if (current === url) {
+            el.tbFrame.setAttribute('src', '');
+          }
           el.tbFrame.setAttribute('src', url);
         }
+        state.tensorboardUrl = url;
         el.tbNote.textContent = note;
         el.tbSection.hidden = false;
+      }
+
+      async function startTensorboard() {
+        if (!el.tbStart) return;
+        const originalText = el.tbStart.textContent;
+        el.tbStart.disabled = true;
+        el.tbStart.textContent = 'Starting...';
+        el.tbNote.textContent = 'Starting TensorBoard...';
+        try {
+          const data = await fetchJson(`${state.apiBase}/tensorboard/start`);
+          const message = pick(data, 'message') || (pick(data, 'alreadyRunning') ? 'TensorBoard already running.' : 'TensorBoard started.');
+          const url = pick(data, 'url') || defaultTensorboardUrl;
+          if (url) {
+            const current = el.tbFrame.getAttribute('src');
+            if (current !== url) {
+              el.tbFrame.setAttribute('src', url);
+            }
+            el.tbSection.hidden = false;
+          }
+          el.tbNote.textContent = message;
+          await refreshAll();
+        } catch (err) {
+          console.error(err);
+          el.tbNote.textContent = err?.message || 'Failed to start TensorBoard.';
+        } finally {
+          el.tbStart.disabled = false;
+          el.tbStart.textContent = originalText;
+        }
       }
 
       function setCounts(runs) {
@@ -1028,6 +1185,7 @@
         ]);
         const now = new Date();
         el.updatedLabel.textContent = now.toLocaleTimeString();
+        state.forceTensorboardReload = false;
       }
 
       function scheduleNextRefresh() {
@@ -1059,8 +1217,10 @@
       }
 
       el.refreshBtn.addEventListener('click', async () => {
+        state.forceTensorboardReload = true;
         await refreshAll();
         scheduleNextRefresh();
+        state.forceTensorboardReload = false;
       });
       el.refreshSlider.addEventListener('input', (event) => {
         setRefreshMs(event.target.value);
@@ -1076,6 +1236,7 @@
         refreshAll();
         scheduleNextRefresh();
       });
+      el.tbStart?.addEventListener('click', startTensorboard);
       el.killBtn.addEventListener('click', killSelectedExecutable);
       el.clearSelection.addEventListener('click', () => {
         state.hiddenRuns.clear();
