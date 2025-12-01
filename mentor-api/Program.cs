@@ -94,6 +94,21 @@ app.MapPost("/process-kill", (KillProcessRequest request) =>
     }
     return Results.Ok(result);
 });
+app.MapPost("/train/archive", (ArchiveRunRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.RunId))
+    {
+        return Results.BadRequest(new { error = "runId is required." });
+    }
+
+    var result = runStore.ArchiveRun(request.RunId, request.ResultsDir);
+    if (!result.Success)
+    {
+        return Results.BadRequest(new { error = result.Message ?? "Unable to archive run.", runId = request.RunId });
+    }
+
+    return Results.Ok(new { success = true, runId = request.RunId, archivedTo = result.ArchivedTo });
+});
 app.MapGet("/tensorboard/start", () =>
 {
     var request = new StartTensorboardRequest(null, null, null, null, null);
@@ -165,6 +180,18 @@ internal sealed record CancelRunResult(CancelRunResultStatus Status, string? Mes
     public static CancelRunResult NotFound(string? message) => new(CancelRunResultStatus.NotFound, message);
     public static CancelRunResult AlreadyCompleted(string? message) => new(CancelRunResultStatus.AlreadyCompleted, message);
 }
+internal enum StopTensorboardStatus
+{
+    Stopped,
+    NotTracked,
+    Failed
+}
+internal sealed record StopTensorboardResult(StopTensorboardStatus Status, string? Message)
+{
+    public static StopTensorboardResult Stopped() => new(StopTensorboardStatus.Stopped, null);
+    public static StopTensorboardResult NotTracked(string? message) => new(StopTensorboardStatus.NotTracked, message);
+    public static StopTensorboardResult Failed(string? message) => new(StopTensorboardStatus.Failed, message);
+}
 internal sealed record ResumeFlagResult(bool Success, string? Message, bool? ResumeOnStart)
 {
     public static ResumeFlagResult Invalid(string? message) => new(false, message, null);
@@ -173,9 +200,11 @@ internal sealed record ResumeFlagResult(bool Success, string? Message, bool? Res
 }
 internal sealed record TrainingRequest(string? ResultsDir, string? CondaEnv, int? BasePort, bool? NoGraphics, bool? SkipConda, bool? Tensorboard, string? EnvPath = null, string? Config = null, string? RunId = null);
 internal sealed record CancelRunRequest(string? ResultsDir, string? RunId = null);
+internal sealed record ArchiveRunRequest(string? RunId, string? ResultsDir = null);
 internal sealed record ResumeFlagRequest(string RunId, bool ResumeOnStart, string? ResultsDir);
 internal sealed record StartTensorboardRequest(string? ResultsDir, string? RunId = null, string? CondaEnv = null, bool? SkipConda = null, int? Port = null);
 internal sealed record StartTensorboardResult(bool Started, bool AlreadyRunning, string? Url, string? Message);
+internal sealed record ArchiveRunResult(bool Success, string? Message, string? ArchivedTo);
 internal sealed record ProcessStatusPayload(string ResultsDirectory, int MlagentsLearnProcesses, IReadOnlyList<string> KnownEnvExecutables, IReadOnlyList<string> RunningEnvExecutables);
 internal sealed record KillProcessRequest(string Executable, string? ResultsDir);
 internal sealed record KillProcessResult(string RequestedExecutable, int MatchedProcesses, int KilledProcesses, IReadOnlyList<string> TargetProcesses, IReadOnlyList<string> Errors);
@@ -228,12 +257,15 @@ internal sealed record TrainingStartResult(bool IsStarted, TrainingRunState? Run
 }
 internal sealed class TrainingRunStore
 {
+    internal const string ArchiveFolderName = "archive";
     private const int DefaultBasePort = 5005;
     private const int BasePortBlockSize = 20;
     private const int BasePortStride = BasePortBlockSize;
     private const int MaxBasePortProbes = 200;
     private readonly Dictionary<string, TrainingRunState> _runs = new();
+    private readonly Dictionary<string, TensorboardInstance> _tensorboards = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _syncRoot = new();
+    private sealed record TensorboardInstance(Process Process, string ResultsDirectory, string? RunId, int Port);
     public CancelRunResult Cancel(string runId, string? resultsDirOverride)
     {
         lock (_syncRoot)
@@ -249,6 +281,67 @@ internal sealed class TrainingRunStore
             run.Cancel();
             return CancelRunResult.Success();
         }
+    }
+    public ArchiveRunResult ArchiveRun(string runId, string? resultsDirOverride)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return new ArchiveRunResult(false, "runId is required.", null);
+        }
+
+        TrainingRunState? tracked;
+        lock (_syncRoot)
+        {
+            _runs.TryGetValue(runId, out tracked);
+        }
+
+        if (tracked is not null && !tracked.IsCompleted)
+        {
+            return new ArchiveRunResult(false, $"Run '{runId}' is still running. Cancel or wait for completion before archiving.", null);
+        }
+
+        var resultsDir = ResolveResultsDirectory(tracked?.ResultsDirectory ?? resultsDirOverride);
+        var normalizedResultsDir = NormalizeDirectoryPath(resultsDir);
+        var runDirectory = BuildRunDirectory(normalizedResultsDir, runId);
+        if (!Directory.Exists(runDirectory))
+        {
+            return new ArchiveRunResult(false, $"Run '{runId}' not found at '{runDirectory}'.", null);
+        }
+
+        var archiveRoot = Path.Combine(normalizedResultsDir, ArchiveFolderName);
+        var destination = Path.Combine(archiveRoot, runId);
+        if (Directory.Exists(destination))
+        {
+            return new ArchiveRunResult(false, $"Archive target already exists at '{destination}'.", null);
+        }
+
+        var stopResult = StopTensorboardForRun(runDirectory);
+        if (stopResult.Status == StopTensorboardStatus.Failed)
+        {
+            return new ArchiveRunResult(false, stopResult.Message ?? "Unable to stop TensorBoard for this run.", null);
+        }
+
+        try
+        {
+            Directory.CreateDirectory(archiveRoot);
+            Directory.Move(runDirectory, destination);
+        }
+        catch (Exception ex)
+        {
+            if (stopResult.Status == StopTensorboardStatus.NotTracked)
+            {
+                return new ArchiveRunResult(false, $"Move failed. TensorBoard may still be running for this run. Stop it manually and retry. Details: {ex.Message}", null);
+            }
+
+            return new ArchiveRunResult(false, $"Unable to archive run '{runId}': {ex.Message}", null);
+        }
+
+        lock (_syncRoot)
+        {
+            _runs.Remove(runId);
+        }
+
+        return new ArchiveRunResult(true, null, destination);
     }
     public ResumeFlagResult SetResumeOnStart(string runId, bool resumeOnStart, string? resultsDirOverride)
     {
@@ -338,6 +431,10 @@ internal sealed class TrainingRunStore
         {
             foreach (var runDirectory in Directory.EnumerateDirectories(resultsDir))
             {
+                if (IsArchiveDirectory(runDirectory))
+                {
+                    continue;
+                }
                 var runId = Path.GetFileName(runDirectory);
                 if (string.IsNullOrWhiteSpace(runId) || knownRunIds.Contains(runId))
                 {
@@ -373,9 +470,20 @@ internal sealed class TrainingRunStore
             }
         }
 
-        if (!Directory.Exists(resultsDir))
+        var normalizedResultsDir = NormalizeDirectoryPath(resultsDir);
+
+        lock (_syncRoot)
         {
-            Directory.CreateDirectory(resultsDir);
+            PruneExitedTensorboards_NoLock();
+            if (_tensorboards.TryGetValue(normalizedResultsDir, out var existing) && !existing.Process.HasExited)
+            {
+                return new StartTensorboardResult(false, true, $"http://localhost:{existing.Port}", $"TensorBoard already running for '{existing.ResultsDirectory}'.");
+            }
+        }
+
+        if (!Directory.Exists(normalizedResultsDir))
+        {
+            Directory.CreateDirectory(normalizedResultsDir);
         }
 
         var activePorts = GetActiveTcpPorts();
@@ -386,7 +494,7 @@ internal sealed class TrainingRunStore
 
         try
         {
-            var process = CreateTensorboardProcess(resultsDir, condaEnv, skipConda, tensorboardPort);
+            var process = CreateTensorboardProcess(normalizedResultsDir, condaEnv, skipConda, tensorboardPort);
             if (!process.Start())
             {
                 return new StartTensorboardResult(false, false, null, "Failed to start TensorBoard process.");
@@ -395,7 +503,13 @@ internal sealed class TrainingRunStore
             var earlyExitMessage = ObserveEarlyTensorboardExit(process);
             if (earlyExitMessage is not null)
             {
+                SafeDispose(process);
                 return new StartTensorboardResult(false, false, null, earlyExitMessage);
+            }
+
+            lock (_syncRoot)
+            {
+                RegisterTensorboard_NoLock(process, normalizedResultsDir, request.RunId, tensorboardPort);
             }
 
             return new StartTensorboardResult(true, false, $"http://localhost:{tensorboardPort}", $"TensorBoard started on port {tensorboardPort}.");
@@ -404,6 +518,45 @@ internal sealed class TrainingRunStore
         {
             return new StartTensorboardResult(false, false, null, ex.Message);
         }
+    }
+    private StopTensorboardResult StopTensorboardForRun(string runDirectory)
+    {
+        var normalizedRunDir = NormalizeDirectoryPath(runDirectory);
+
+        lock (_syncRoot)
+        {
+            PruneExitedTensorboards_NoLock();
+            foreach (var kvp in _tensorboards.ToArray())
+            {
+                var instance = kvp.Value;
+                if (!IsPathUnderDirectory(normalizedRunDir, instance.ResultsDirectory))
+                {
+                    continue;
+                }
+
+                var process = instance.Process;
+                try
+                {
+                    if (!process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                        process.WaitForExit(TimeSpan.FromSeconds(5));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return StopTensorboardResult.Failed($"Unable to stop TensorBoard (PID {process.Id}): {ex.Message}");
+                }
+                finally
+                {
+                    RemoveTensorboard_NoLock(kvp.Key, process);
+                }
+
+                return StopTensorboardResult.Stopped();
+            }
+        }
+
+        return StopTensorboardResult.NotTracked("TensorBoard for this run is not managed by mentor-api. Stop it manually and retry.");
     }
     public IReadOnlyList<string> ResumeUnfinishedRuns(Action<string>? log = null, string? resultsDirOverride = null)
     {
@@ -418,6 +571,10 @@ internal sealed class TrainingRunStore
         }
         foreach (var runDirectory in Directory.EnumerateDirectories(resultsDir))
         {
+            if (IsArchiveDirectory(runDirectory))
+            {
+                continue;
+            }
             var runId = Path.GetFileName(runDirectory);
             var statusPath = BuildTrainingStatusPath(resultsDir, runId);
             var status = TryReadStatusFromFile(statusPath);
@@ -671,6 +828,81 @@ internal sealed class TrainingRunStore
         }
 
         return null;
+    }
+    private void RegisterTensorboard_NoLock(Process process, string resultsDir, string? runId, int port)
+    {
+        var key = NormalizeDirectoryPath(resultsDir);
+        process.EnableRaisingEvents = true;
+        _tensorboards[key] = new TensorboardInstance(process, key, runId, port);
+        process.Exited += (_, _) =>
+        {
+            lock (_syncRoot)
+            {
+                RemoveTensorboard_NoLock(key, process);
+            }
+        };
+    }
+    private void RemoveTensorboard_NoLock(string key, Process? process = null)
+    {
+        if (_tensorboards.TryGetValue(key, out var existing))
+        {
+            if (process is null || ReferenceEquals(existing.Process, process))
+            {
+                _tensorboards.Remove(key);
+                SafeDispose(existing.Process);
+            }
+        }
+    }
+    private void PruneExitedTensorboards_NoLock()
+    {
+        foreach (var key in _tensorboards.Where(kvp => kvp.Value.Process.HasExited).Select(kvp => kvp.Key).ToArray())
+        {
+            RemoveTensorboard_NoLock(key, _tensorboards[key].Process);
+        }
+    }
+    private static void SafeDispose(Process process)
+    {
+        try
+        {
+            process.Dispose();
+        }
+        catch
+        {
+            // ignore dispose failures
+        }
+    }
+    private static string NormalizeDirectoryPath(string path)
+    {
+        try
+        {
+            return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        catch
+        {
+            return path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+    }
+    internal static bool IsArchiveDirectory(string path)
+    {
+        var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return string.Equals(name, ArchiveFolderName, StringComparison.OrdinalIgnoreCase);
+    }
+    private static bool IsPathUnderDirectory(string path, string parentDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(parentDirectory))
+        {
+            return false;
+        }
+
+        var normalizedPath = NormalizeDirectoryPath(path);
+        var normalizedParent = NormalizeDirectoryPath(parentDirectory);
+        var prefix = normalizedParent.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal) ||
+                     normalizedParent.EndsWith(Path.AltDirectorySeparatorChar.ToString(), StringComparison.Ordinal)
+            ? normalizedParent
+            : normalizedParent + Path.DirectorySeparatorChar;
+
+        return normalizedPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalizedPath, normalizedParent, StringComparison.OrdinalIgnoreCase);
     }
     internal static string ResolveResultsDirectory(string? resultsDirOverride)
     {
@@ -987,6 +1219,10 @@ internal static class ProcessStatusReader
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var runDirectory in Directory.EnumerateDirectories(resultsDirectory))
         {
+            if (TrainingRunStore.IsArchiveDirectory(runDirectory))
+            {
+                continue;
+            }
             var metadata = TrainingRunMetadata.TryLoad(runDirectory);
             if (metadata is null || string.IsNullOrWhiteSpace(metadata.EnvPath))
             {
