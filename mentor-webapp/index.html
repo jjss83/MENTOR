@@ -35,7 +35,7 @@
       letter-spacing: 0.01em;
     }
     .page {
-      max-width: 1200px;
+      max-width: 2000px;
       margin: 0 auto;
       padding: 32px 26px 48px;
     }
@@ -89,6 +89,7 @@
       border: 1px solid var(--stroke);
       border-radius: 12px;
       overflow: hidden;
+      margin: 0 auto;
     }
     .embed-frame iframe {
       width: 100%;
@@ -107,6 +108,13 @@
       min-width: 240px;
       box-shadow: var(--shadow);
     }
+    .tb-controls {
+       display: flex;
+       flex-wrap: wrap;
+       gap: 10px;
+       align-items: center;
+       margin: 10px 0 4px;
+     }
     .slider-label {
       display: flex;
       flex-direction: column;
@@ -396,6 +404,64 @@
       justify-content: flex-end;
       margin-top: 6px;
     }
+    .detail-text {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      color: #dfe5f5;
+      font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      padding: 10px 12px;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+      column-width: 420px;
+      column-gap: 16px;
+      word-break: break-word;
+      white-space: normal;
+    }
+    .detail-list {
+      display: block;
+    }
+    .detail-line {
+      display: block;
+      break-inside: avoid;
+      border-left: 2px solid var(--stroke);
+      padding-left: 10px;
+      margin-bottom: 6px;
+    }
+    .detail-key {
+      color: var(--muted);
+      min-width: 140px;
+      display: inline-block;
+      margin-right: 6px;
+    }
+    .detail-value {
+      color: #e7e9ee;
+      word-break: break-word;
+    }
+    .detail-value.positive { color: var(--success); }
+    .detail-value.warning { color: var(--warning); }
+    .detail-value.negative { color: var(--error); }
+    .resume-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .resume-note { color: var(--muted); font-size: 12px; }
+    .resume-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border: 1px solid var(--stroke);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+    }
     .log-actions button {
       padding: 8px 12px;
       border-radius: 10px;
@@ -436,23 +502,15 @@
             </div>
             <input id="refresh-slider" type="range" min="1" max="10" step="1" value="5" aria-label="Refresh cadence (seconds)" />
           </div>
-          <div class="slider-wrap" aria-label="TensorBoard height">
-            <div class="slider-label">
-              <div class="label">TensorBoard height</div>
-              <div class="slider-value"><span id="embed-height-value">360</span>px</div>
-            </div>
-            <input id="embed-height-slider" type="range" min="240" max="800" step="20" value="360" aria-label="TensorBoard height (px)" />
-          </div>
           <div class="slider-wrap" aria-label="Run log height">
             <div class="slider-label">
               <div class="label">Run log height</div>
               <div class="slider-value"><span id="log-height-value">140</span>px</div>
             </div>
-            <input id="log-height-slider" type="range" min="100" max="400" step="20" value="140" aria-label="Run log height (px)" />
-          </div>
-          <button id="set-api">Set API</button>
-          <button id="refresh" class="secondary">Refresh now</button>
+          <input id="log-height-slider" type="range" min="100" max="400" step="20" value="140" aria-label="Run log height (px)" />
         </div>
+        <button id="refresh" class="secondary">Refresh now</button>
+      </div>
       </div>
       <div class="status-row">
         <div class="tile">
@@ -483,6 +541,15 @@
           <div class="section-title">TensorBoard - Environment / Cumulative Reward</div>
           <div class="section-note" id="tensorboard-note"></div>
           <button id="start-tensorboard" class="secondary">Start TensorBoard</button>
+        </div>
+        <div class="tb-controls">
+          <div class="slider-wrap" aria-label="TensorBoard height">
+            <div class="slider-label">
+              <div class="label">TensorBoard height</div>
+              <div class="slider-value"><span id="embed-height-value">360</span>px</div>
+            </div>
+            <input id="embed-height-slider" type="range" min="240" max="1200" step="20" value="360" aria-label="TensorBoard height (px)" />
+          </div>
         </div>
         <div class="embed-frame">
           <iframe id="tensorboard-frame" title="TensorBoard Environment Cumulative Reward"></iframe>
@@ -574,7 +641,7 @@
       }
 
       const storedEmbedHeight = Number(localStorage.getItem('mentorEmbedHeight'));
-      if (storedEmbedHeight >= 240 && storedEmbedHeight <= 800) {
+      if (storedEmbedHeight >= 240 && storedEmbedHeight <= 1200) {
         state.embedHeight = storedEmbedHeight;
       }
 
@@ -615,7 +682,6 @@
         killBtn: document.getElementById('kill-btn'),
         killNote: document.getElementById('kill-note'),
         refreshBtn: document.getElementById('refresh'),
-        setApiBtn: document.getElementById('set-api'),
       };
 
       const pick = (obj, key) => obj?.[key] ?? obj?.[key.charAt(0).toUpperCase() + key.slice(1)];
@@ -650,12 +716,13 @@
 
       function setEmbedHeight(px) {
         const fallback = state.embedHeight;
-        const value = Math.min(800, Math.max(240, Number(px) || fallback));
+        const value = Math.min(1200, Math.max(240, Number(px) || fallback));
         state.embedHeight = value;
         localStorage.setItem('mentorEmbedHeight', value);
         el.embedHeightSlider.value = value;
         el.embedHeightValue.textContent = value;
         document.documentElement.style.setProperty('--embed-height', `${value}px`);
+        state.forceTensorboardReload = true;
       }
 
       function setLogHeight(px) {
@@ -859,77 +926,93 @@
         selectionWrap.style.gap = '6px';
         selectionWrap.append(selection, toggleLabel);
         const archiveBtn = createArchiveButton(runId);
-        const actions = document.createElement('div');
-        actions.className = 'card-actions';
-        actions.append(archiveBtn, chip);
-        header.append(selectionWrap, id, actions);
-
-        const metaRow = document.createElement('div');
-        metaRow.className = 'meta-row';
-        metaRow.append(
-          createMeta('Results', pick(run, 'resultsDirectory') || '-'),
-          createMeta('Training status', pick(run, 'trainingStatusPath') || '-'),
-          createMeta('TensorBoard URL', pick(run, 'tensorboardUrl') || '-'),
-          createMeta('Log path', logPath || '-'),
-          createMeta('Exit code', pick(run, 'exitCode') ?? '-')
-        );
-
-        const paramsRow = document.createElement('div');
-        paramsRow.className = 'meta-row';
-        paramsRow.append(
-          createMeta('Env path', pick(runParams, 'envPath') || '-'),
-          createMeta('Config', pick(runParams, 'configPath') || '-'),
-          createMeta('Conda env', pick(runParams, 'condaEnv') || '-'),
-          createMeta('Base port', pick(runParams, 'basePort') ?? '-'),
-          createMeta('Graphics', formatFlag(pick(runParams, 'noGraphics'), 'No graphics', 'Graphics enabled')),
-          createMeta('Env executable', formatFlag(pick(runParams, 'hasEnvExecutable'), 'Yes', 'No')),
-          createMeta('Skip conda', formatFlag(pick(runParams, 'skipConda'), 'Skip', 'Use conda')),
-          createMeta('Launch TensorBoard', formatFlag(pick(runParams, 'tensorboard'), 'Yes', 'No')),
-          createMeta('Resume on start', formatFlag(resumeFlag, 'Resume enabled', 'Start fresh'))
-        );
-        const resumeRow = document.createElement('div');
-        resumeRow.className = 'meta';
-        const resumeLabel = document.createElement('div');
-        resumeLabel.className = 'label';
-        resumeLabel.textContent = 'Resume on API start';
         const resumeControl = document.createElement('div');
-        resumeControl.style.display = 'flex';
-        resumeControl.style.alignItems = 'center';
-        resumeControl.style.gap = '8px';
+        resumeControl.className = 'resume-inline';
         const resumeToggle = document.createElement('input');
         resumeToggle.type = 'checkbox';
         resumeToggle.checked = isCompleted ? false : !!resumeFlag;
+        resumeToggle.disabled = isCompleted;
         resumeToggle.addEventListener('click', (event) => event.stopPropagation());
+        const resumeLabel = document.createElement('div');
+        resumeLabel.className = 'pill-label';
+        resumeLabel.textContent = 'Resume';
         const resumeNote = document.createElement('div');
-        resumeNote.className = 'pill-label';
-        if (isCompleted) {
-          resumeToggle.disabled = true;
-          resumeNote.textContent = 'Completed runs cannot auto-resume';
-        } else {
-          resumeNote.textContent = resumeToggle.checked ? 'Will resume automatically' : 'Disabled by default';
-        }
-        resumeToggle.addEventListener('change', async (event) => {
+        resumeNote.className = 'resume-note';
+        const setResumeNote = (value) => {
           if (isCompleted) {
-            event.preventDefault();
-            return;
+            resumeNote.textContent = 'Completed';
+          } else {
+            resumeNote.textContent = value ? 'On' : 'Off';
           }
+        };
+        setResumeNote(resumeToggle.checked);
+        resumeToggle.addEventListener('change', async (event) => {
+          if (isCompleted) return;
           const desired = event.target.checked;
           resumeToggle.disabled = true;
-          resumeNote.textContent = desired ? 'Marking...' : 'Updating...';
+          resumeNote.textContent = 'Saving...';
           try {
             await postJson(`${state.apiBase}/train/resume-flag`, { runId, resumeOnStart: desired, resultsDir: pick(run, 'resultsDirectory') });
-            resumeNote.textContent = desired ? 'Will resume automatically' : 'Will not auto-resume';
+            setResumeNote(desired);
             await refreshAll();
           } catch (err) {
             console.error(err);
             resumeToggle.checked = !desired;
             resumeNote.textContent = err?.message || 'Failed to update';
           } finally {
-            resumeToggle.disabled = false;
+            resumeToggle.disabled = isCompleted ? true : false;
           }
         });
-        resumeControl.append(resumeToggle, resumeNote);
-        resumeRow.append(resumeLabel, resumeControl);
+        resumeControl.append(resumeToggle, resumeLabel, resumeNote);
+        const actions = document.createElement('div');
+        actions.className = 'card-actions';
+        actions.append(archiveBtn, resumeControl, chip);
+        header.append(selectionWrap, id, actions);
+
+        const detailLines = [
+          { key: 'Run', value: runId },
+          { key: 'Status', value: statusText || 'unknown' },
+          { key: 'Completed', value: isCompleted ? 'Yes' : 'No' },
+          { key: 'Results', value: pick(run, 'resultsDirectory') || '-' },
+          { key: 'Training status', value: pick(run, 'trainingStatusPath') || '-' },
+          { key: 'TensorBoard', value: pick(run, 'tensorboardUrl') || '-' },
+          { key: 'Log path', value: logPath || '-' },
+          { key: 'Exit code', value: pick(run, 'exitCode') ?? '-' },
+          { key: 'Env path', value: pick(runParams, 'envPath') || '-' },
+          { key: 'Config', value: pick(runParams, 'configPath') || '-' },
+          { key: 'Conda env', value: pick(runParams, 'condaEnv') || '-' },
+          { key: 'Base port', value: pick(runParams, 'basePort') ?? '-' },
+          { key: 'Graphics', value: formatFlag(pick(runParams, 'noGraphics'), 'No graphics', 'Graphics enabled') },
+          { key: 'Env executable', value: formatFlag(pick(runParams, 'hasEnvExecutable'), 'Yes', 'No') },
+          { key: 'Skip conda', value: formatFlag(pick(runParams, 'skipConda'), 'Skip', 'Use conda') },
+          { key: 'Launch TensorBoard', value: formatFlag(pick(runParams, 'tensorboard'), 'Yes', 'No') },
+          { key: 'Resume on start', value: formatFlag(resumeFlag, 'Yes', 'No') },
+        ];
+        const detailArea = document.createElement('div');
+        detailArea.className = 'detail-text detail-list';
+        detailArea.setAttribute('role', 'textbox');
+        detailArea.setAttribute('aria-readonly', 'true');
+        detailArea.setAttribute('aria-label', `Details for ${runId}`);
+        detailLines.forEach(line => {
+          const row = document.createElement('div');
+          row.className = 'detail-line';
+          const keySpan = document.createElement('span');
+          keySpan.className = 'detail-key';
+          keySpan.textContent = `${line.key}:`;
+          const valueSpan = document.createElement('span');
+          valueSpan.className = 'detail-value';
+          valueSpan.textContent = line.value ?? '-';
+          const lower = String(line.value ?? '').toLowerCase();
+          if (['running', 'yes', 'true'].includes(lower) || lower === 'graphics enabled') {
+            valueSpan.classList.add('positive');
+          } else if (['failed', 'failure', 'not-found', 'unknown'].includes(lower) || lower.startsWith('no ')) {
+            valueSpan.classList.add('negative');
+          } else if (lower === '-' || lower === 'skip') {
+            valueSpan.classList.add('warning');
+          }
+          row.append(keySpan, valueSpan);
+          detailArea.append(row);
+        });
 
         const log = document.createElement('div');
         log.className = 'log';
@@ -966,9 +1049,9 @@
           const text = document.createElement('div');
           text.textContent = message;
           msg.append(labelEl, text);
-          detailsWrap.append(metaRow, paramsRow, resumeRow, msg, log, logActions);
+          detailsWrap.append(detailArea, msg, log, logActions);
         } else {
-          detailsWrap.append(metaRow, paramsRow, resumeRow, log, logActions);
+          detailsWrap.append(detailArea, log, logActions);
         }
 
         detailsWrap.hidden = !detailsVisible;
@@ -1004,18 +1087,6 @@
         if (value === true) return truthyLabel;
         if (value === false) return falsyLabel;
         return '-';
-      }
-
-      function createMeta(label, value) {
-        const wrap = document.createElement('div');
-        wrap.className = 'meta';
-        const l = document.createElement('div');
-        l.className = 'label';
-        l.textContent = label;
-        const v = document.createElement('div');
-        v.textContent = value;
-        wrap.append(l, v);
-        return wrap;
       }
 
       function toggleRunSelection(runId, selected) {
@@ -1311,10 +1382,17 @@
       el.logHeightSlider.addEventListener('input', (event) => {
         setLogHeight(event.target.value);
       });
-      el.setApiBtn.addEventListener('click', () => {
+      const applyApiBase = () => {
+        state.forceTensorboardReload = true;
         setApiBase(el.apiInput.value);
         refreshAll();
         scheduleNextRefresh();
+      };
+      el.apiInput.addEventListener('change', applyApiBase);
+      el.apiInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          applyApiBase();
+        }
       });
       el.tbStart?.addEventListener('click', startTensorboard);
       el.killBtn.addEventListener('click', killSelectedExecutable);
