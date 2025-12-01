@@ -283,7 +283,14 @@ internal sealed class TrainingSessionRunner
         }
 
         arguments.Add($"--results-dir={_options.ResultsDirectory}");
-        arguments.Add("--force");
+        if (_options.Resume)
+        {
+            arguments.Add("--resume");
+        }
+        else
+        {
+            arguments.Add("--force");
+        }
 
         arguments.Add($"--base-port={_basePort}");
         arguments.Add("--torch-device");

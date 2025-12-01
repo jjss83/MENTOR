@@ -625,7 +625,7 @@ internal sealed class TrainingRunStore
                     continue;
                 }
             }
-            var startResult = TryStart(metadata.ToOptions());
+            var startResult = TryStart(metadata.ToOptions(resume: true));
             var statusLabel = string.IsNullOrWhiteSpace(status) ? "unknown" : status!.ToLowerInvariant();
             if (startResult.IsStarted && startResult.Run is not null)
             {
@@ -1007,7 +1007,7 @@ internal sealed class TrainingRunStore
     {
         return Path.Combine(resultsDirectory, runId, "run_logs", "mentor-api.log");
     }
-    internal static IReadOnlyList<string> ReadLogTail(string? logPath, int lineCount = 10)
+    internal static IReadOnlyList<string> ReadLogTail(string? logPath, int lineCount = 20)
     {
         if (string.IsNullOrWhiteSpace(logPath) || !File.Exists(logPath))
         {
@@ -1201,9 +1201,9 @@ internal sealed record TrainingRunMetadata(string? EnvPath, string ConfigPath, s
             return null;
         }
     }
-    public TrainingOptions ToOptions()
+    public TrainingOptions ToOptions(bool resume = false)
     {
-        return new TrainingOptions(EnvPath, ConfigPath, RunId, ResultsDirectory, CondaEnvironmentName, BasePort, NoGraphics, SkipConda, LaunchTensorboard);
+        return new TrainingOptions(EnvPath, ConfigPath, RunId, ResultsDirectory, CondaEnvironmentName, BasePort, NoGraphics, SkipConda, LaunchTensorboard, Resume: resume);
     }
     private static string BuildMetadataPath(string runDirectory)
     {

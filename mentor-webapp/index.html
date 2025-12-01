@@ -606,7 +606,7 @@
             <div class="label">Run log height</div>
             <div class="slider-value"><span id="log-height-value">140</span>px</div>
           </div>
-          <input id="log-height-slider" type="range" min="100" max="400" step="20" value="140" aria-label="Run log height (px)" />
+          <input id="log-height-slider" type="range" min="100" max="1200" step="20" value="140" aria-label="Run log height (px)" />
         </div>
       </section>
 
@@ -655,7 +655,7 @@
       }
 
       const storedLogHeight = Number(localStorage.getItem('mentorLogHeight'));
-      if (storedLogHeight >= 100 && storedLogHeight <= 400) {
+      if (storedLogHeight >= 100 && storedLogHeight <= 1200) {
         state.logHeight = storedLogHeight;
       }
 
@@ -737,7 +737,7 @@
 
       function setLogHeight(px) {
         const fallback = state.logHeight;
-        const value = Math.min(400, Math.max(100, Number(px) || fallback));
+        const value = Math.min(1200, Math.max(100, Number(px) || fallback));
         state.logHeight = value;
         localStorage.setItem('mentorLogHeight', value);
         el.logHeightSlider.value = value;
