@@ -11,7 +11,7 @@ internal static class UsageText
         builder.AppendLine("  dotnet run -- --config <trainer-config.yaml> [--env-path <path-to-env-exe>] [options]\\n");
         builder.AppendLine("Options:");
         builder.AppendLine("  --env-path <path>       Optional Unity environment executable (.exe); omit when using the Unity Editor Play mode");
-        builder.AppendLine("  --run-id <id>             Optional run identifier. Default: run-<behavior>-<UTC timestamp>");
+        builder.AppendLine("  --run-id <id>             Optional run identifier. Default: rt-<YYMMDD>-<n> (UTC date with daily counter)");
         builder.AppendLine("  --results-dir <path>      Directory to store training artifacts. Default: X:\\\\workspace\\\\MENTOR\\\\ml-agents-training-results");
         builder.AppendLine("  --conda-env <name>        Name of the ML-Agents Conda environment. Default: mlagents");
         builder.AppendLine("  --base-port <port>        Base port to use when launching the environment (auto-selects from 5005 if omitted)");

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 
 namespace MentorTrainingRunner;
 
@@ -165,7 +164,7 @@ internal sealed record TrainingOptions(
             return false;
         }
 
-        builder.RunId ??= BuildDefaultRunId(builder.TrainerConfigPath);
+        builder.RunId ??= BuildDefaultRunId(builder.ResultsDirectory);
         builder.CondaEnvironmentName ??= DefaultCondaEnvironmentName;
 
         options = new TrainingOptions(
@@ -229,132 +228,56 @@ internal sealed record TrainingOptions(
         }
     }
 
-    private static string BuildDefaultRunId(string? trainerConfigPath)
+    private static string BuildDefaultRunId(string? resultsDirectory)
     {
-        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
-        var behavior = TryExtractBehaviorName(trainerConfigPath);
+        var datePart = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
+        var prefix = $"rt-{datePart}-";
+        var nextSequence = 1;
 
-        if (string.IsNullOrWhiteSpace(behavior))
+        if (!string.IsNullOrWhiteSpace(resultsDirectory) && Directory.Exists(resultsDirectory))
         {
-            return $"run-{timestamp}";
-        }
-
-        return $"run-{behavior}-{timestamp}";
-    }
-
-    private static string? TryExtractBehaviorName(string? trainerConfigPath)
-    {
-        if (string.IsNullOrWhiteSpace(trainerConfigPath) || !File.Exists(trainerConfigPath))
-        {
-            return null;
-        }
-
-        try
-        {
-            var inBehaviors = false;
-            var behaviorsIndent = 0;
-
-            foreach (var rawLine in File.ReadLines(trainerConfigPath))
+            try
             {
-                if (string.IsNullOrWhiteSpace(rawLine))
+                foreach (var path in Directory.EnumerateFileSystemEntries(resultsDirectory))
                 {
-                    continue;
-                }
-
-                var indent = CountLeadingSpaces(rawLine);
-                var trimmed = rawLine.Trim();
-
-                if (trimmed.StartsWith("#", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (!inBehaviors)
-                {
-                    if (trimmed.StartsWith("behaviors:", StringComparison.OrdinalIgnoreCase))
+                    var name = Path.GetFileName(path);
+                    var sequence = TryParseSequence(name, prefix);
+                    if (sequence.HasValue)
                     {
-                        inBehaviors = true;
-                        behaviorsIndent = indent;
+                        nextSequence = Math.Max(nextSequence, sequence.Value + 1);
                     }
-
-                    continue;
-                }
-
-                if (indent <= behaviorsIndent)
-                {
-                    break;
-                }
-
-                var colonIndex = trimmed.IndexOf(':');
-                if (colonIndex <= 0)
-                {
-                    continue;
-                }
-
-                var behaviorName = trimmed[..colonIndex].Trim();
-                var normalized = NormalizeBehaviorName(behaviorName);
-                if (!string.IsNullOrWhiteSpace(normalized))
-                {
-                    return normalized;
                 }
             }
+            catch
+            {
+                // Ignore directory probing failures and fall back to the first sequence.
+            }
         }
-        catch
+
+        return $"{prefix}{nextSequence}";
+    }
+
+    private static int? TryParseSequence(string? name, string prefix)
+    {
+        if (string.IsNullOrWhiteSpace(name) || !name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
 
-        return null;
-    }
-
-    private static int CountLeadingSpaces(string text)
-    {
-        var count = 0;
-        foreach (var ch in text)
+        var suffix = name[prefix.Length..];
+        var digitsLength = 0;
+        while (digitsLength < suffix.Length && char.IsDigit(suffix[digitsLength]))
         {
-            if (ch == ' ')
-            {
-                count++;
-            }
-            else if (ch == '\t')
-            {
-                count += 2;
-            }
-            else
-            {
-                break;
-            }
+            digitsLength++;
         }
 
-        return count;
-    }
-
-    private static string? NormalizeBehaviorName(string behaviorName)
-    {
-        if (string.IsNullOrWhiteSpace(behaviorName))
+        if (digitsLength == 0)
         {
             return null;
         }
 
-        var buffer = new StringBuilder(behaviorName.Length);
-        foreach (var ch in behaviorName)
-        {
-            if (char.IsLetterOrDigit(ch))
-            {
-                buffer.Append(char.ToLowerInvariant(ch));
-            }
-            else if (ch is '-' or '_')
-            {
-                buffer.Append(ch);
-            }
-            else
-            {
-                buffer.Append('-');
-            }
-        }
-
-        var normalized = buffer.ToString().Trim('-');
-        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+        var numberPart = suffix[..digitsLength];
+        return int.TryParse(numberPart, NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : null;
     }
 
     private sealed class OptionsBuilder
