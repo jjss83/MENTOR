@@ -763,7 +763,7 @@
           div.textContent = errorMessage;
           el.runGrid.appendChild(div);
           setCounts([]);
-          renderTensorboard([]);
+          renderTensorboard([], state.forceTensorboardReload);
           state.hiddenRuns.clear();
           state.lastRuns = [];
           updateSelectionChip();
@@ -777,7 +777,7 @@
           div.textContent = 'No runs yet. Kick off training to see status here.';
           el.runGrid.appendChild(div);
           setCounts([]);
-          renderTensorboard([]);
+          renderTensorboard([], state.forceTensorboardReload);
           state.hiddenRuns.clear();
           updateSelectionChip();
           return;
@@ -1010,10 +1010,11 @@
         const current = el.tbFrame.getAttribute('src');
         const shouldReload = forceReload || current !== url;
         if (shouldReload) {
-          if (current === url) {
-            el.tbFrame.setAttribute('src', '');
-          }
-          el.tbFrame.setAttribute('src', url);
+          const resetUrl = 'about:blank';
+          el.tbFrame.setAttribute('src', resetUrl);
+          setTimeout(() => {
+            el.tbFrame.setAttribute('src', url);
+          }, 0);
         }
         state.tensorboardUrl = url;
         el.tbNote.textContent = note;
