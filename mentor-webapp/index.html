@@ -502,13 +502,6 @@
             </div>
             <input id="refresh-slider" type="range" min="1" max="10" step="1" value="5" aria-label="Refresh cadence (seconds)" />
           </div>
-          <div class="slider-wrap" aria-label="Run log height">
-            <div class="slider-label">
-              <div class="label">Run log height</div>
-              <div class="slider-value"><span id="log-height-value">140</span>px</div>
-            </div>
-          <input id="log-height-slider" type="range" min="100" max="400" step="20" value="140" aria-label="Run log height (px)" />
-        </div>
         <button id="refresh" class="secondary">Refresh now</button>
       </div>
       </div>
@@ -538,9 +531,14 @@
     <main>
       <section id="tensorboard-embed" class="embed-card" hidden>
         <div class="section-head">
-          <div class="section-title">TensorBoard - Environment / Cumulative Reward</div>
-          <div class="section-note" id="tensorboard-note"></div>
-          <button id="start-tensorboard" class="secondary">Start TensorBoard</button>
+          <div>
+            <div class="section-title">TensorBoard - Environment / Cumulative Reward</div>
+            <div class="section-note" id="tensorboard-note"></div>
+          </div>
+          <div class="pill-row">
+            <button id="toggle-tensorboard" class="secondary">Collapse</button>
+            <button id="start-tensorboard" class="secondary">Start TensorBoard</button>
+          </div>
         </div>
         <div class="tb-controls">
           <div class="slider-wrap" aria-label="TensorBoard height">
@@ -603,6 +601,16 @@
       </section>
 
       <section>
+        <div class="slider-wrap" aria-label="Run log height">
+          <div class="slider-label">
+            <div class="label">Run log height</div>
+            <div class="slider-value"><span id="log-height-value">140</span>px</div>
+          </div>
+          <input id="log-height-slider" type="range" min="100" max="400" step="20" value="140" aria-label="Run log height (px)" />
+        </div>
+      </section>
+
+      <section>
         <div class="section-head">
           <div class="section-title">Runs</div>
           <div class="section-note" id="runs-note"></div>
@@ -631,6 +639,7 @@
         lastRuns: [],
         tensorboardUrl: null,
         forceTensorboardReload: false,
+        tensorboardCollapsed: false,
       };
 
       const defaultTensorboardUrl = 'http://localhost:6006/';
@@ -665,6 +674,7 @@
         tbSection: document.getElementById('tensorboard-embed'),
         tbFrame: document.getElementById('tensorboard-frame'),
         tbNote: document.getElementById('tensorboard-note'),
+        tbToggle: document.getElementById('toggle-tensorboard'),
         tbStart: document.getElementById('start-tensorboard'),
         runGrid: document.getElementById('run-grid'),
         runsNote: document.getElementById('runs-note'),
@@ -1159,6 +1169,9 @@
         state.tensorboardUrl = url;
         el.tbNote.textContent = note;
         el.tbSection.hidden = false;
+        el.tbToggle.textContent = state.tensorboardCollapsed ? 'Expand' : 'Collapse';
+        el.tbFrame.closest('.embed-frame').style.display = state.tensorboardCollapsed ? 'none' : 'block';
+        document.querySelector('.tb-controls')?.classList.toggle('collapsed', state.tensorboardCollapsed);
       }
 
       async function startTensorboard() {
@@ -1395,6 +1408,10 @@
         }
       });
       el.tbStart?.addEventListener('click', startTensorboard);
+      el.tbToggle?.addEventListener('click', () => {
+        state.tensorboardCollapsed = !state.tensorboardCollapsed;
+        renderTensorboard(state.lastRuns, true);
+      });
       el.killBtn.addEventListener('click', killSelectedExecutable);
       el.clearSelection.addEventListener('click', () => {
         state.hiddenRuns.clear();
