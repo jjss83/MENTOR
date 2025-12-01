@@ -169,6 +169,26 @@
       transform: translateY(0);
       opacity: 0.92;
     }
+    .icon-btn {
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      box-shadow: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      min-width: 0;
+      line-height: 0;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, opacity 120ms ease;
+    }
+    .icon-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: var(--accent); transform: translateY(-1px); }
+    .icon-btn:active { transform: translateY(0); opacity: 0.9; }
+    .icon-btn svg { width: 16px; height: 16px; }
+    .icon-btn.spinning svg { animation: spin 0.8s linear infinite; }
+    .icon-btn.error { border-color: var(--error); color: var(--error); }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .status-row {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -320,6 +340,7 @@
       align-items: center;
       gap: 10px;
     }
+    .card-actions { display: inline-flex; align-items: center; gap: 8px; }
     .run-id {
       font-weight: 700;
       font-size: 16px;
@@ -697,7 +718,12 @@
         });
         const text = await response.text();
         if (!response.ok) {
-          throw new Error(text || `Request failed (${response.status})`);
+          let message = text || `Request failed (${response.status})`;
+          try {
+            const parsed = JSON.parse(text);
+            message = parsed?.error || parsed?.message || message;
+          } catch { /* ignore parse errors */ }
+          throw new Error(message);
         }
         if (!text) return {};
         try {
@@ -832,7 +858,11 @@
         selectionWrap.style.alignItems = 'center';
         selectionWrap.style.gap = '6px';
         selectionWrap.append(selection, toggleLabel);
-        header.append(selectionWrap, id, chip);
+        const archiveBtn = createArchiveButton(runId);
+        const actions = document.createElement('div');
+        actions.className = 'card-actions';
+        actions.append(archiveBtn, chip);
+        header.append(selectionWrap, id, actions);
 
         const metaRow = document.createElement('div');
         metaRow.className = 'meta-row';
@@ -957,6 +987,19 @@
         return card;
       }
 
+      function createArchiveButton(runId) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'icon-btn';
+        btn.title = `Archive ${runId}`;
+        btn.innerHTML = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path fill="currentColor" d="M4.25 6.5c-.966 0-1.75.784-1.75 1.75v7a1.75 1.75 0 0 0 1.75 1.75h11.5A1.75 1.75 0 0 0 17.5 15.25v-7c0-.966-.784-1.75-1.75-1.75H4.25Zm-.25 1.75c0-.138.112-.25.25-.25h11.5c.138 0 .25.112.25.25v7c0 .138-.112.25-.25.25H4.25a.25.25 0 0 1-.25-.25v-7Zm9.86-3.5-1.04-2.306A.75.75 0 0 0 12.109 2H7.891a.75.75 0 0 0-.671.394L6.18 4.75H4.75a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5h-1.39ZM8.55 3.5h2.9l.45 1H8.1l.45-1Zm2.81 4.29a.75.75 0 0 0-1.06 0l-.8.8-.8-.8a.75.75 0 1 0-1.06 1.06l.8.8-.8.8a.75.75 0 1 0 1.06 1.06l.8-.8.8.8a.75.75 0 0 0 1.06-1.06l-.8-.8.8-.8a.75.75 0 0 0 0-1.06Z"/></svg>`;
+        btn.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          await archiveRun(runId, btn);
+        });
+        return btn;
+      }
+
       function formatFlag(value, truthyLabel = 'Yes', falsyLabel = 'No') {
         if (value === true) return truthyLabel;
         if (value === false) return falsyLabel;
@@ -994,6 +1037,32 @@
             card.classList.toggle('collapsed', !selected);
           }
         });
+      }
+
+      async function archiveRun(runId, button) {
+        if (!runId) return;
+        if (button) {
+          button.disabled = true;
+          button.classList.add('spinning');
+        }
+        try {
+          await postJson(`${state.apiBase}/train/archive`, { runId });
+          state.lastRuns = state.lastRuns.filter(r => pick(r, 'runId') !== runId);
+          renderRuns(state.lastRuns);
+        } catch (err) {
+          console.error(err);
+          const message = (err?.message || 'Failed to archive run.').trim();
+          el.runsNote.textContent = message;
+          if (button) {
+            button.classList.add('error');
+            setTimeout(() => button.classList.remove('error'), 1400);
+          }
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.classList.remove('spinning');
+          }
+        }
       }
 
       function renderTensorboard(runs, forceReload = false) {
