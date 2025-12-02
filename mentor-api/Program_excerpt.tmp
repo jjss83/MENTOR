@@ -1,0 +1,120 @@
+            {
+                return CancelRunResult.NotFound(null);
+            }
+            if (run.IsCompleted)
+            {
+                return CancelRunResult.AlreadyCompleted(null);
+            }
+            run.Cancel();
+            return CancelRunResult.Success();
+        }
+    }
+    public ArchiveRunResult ArchiveRun(string runId, string? resultsDirOverride)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return new ArchiveRunResult(false, "runId is required.", null);
+        }
+
+        TrainingRunState? tracked;
+        lock (_syncRoot)
+        {
+            _runs.TryGetValue(runId, out tracked);
+        }
+
+        if (tracked is not null && !tracked.IsCompleted)
+        {
+            return new ArchiveRunResult(false, $"Run '{runId}' is still running. Cancel or wait for completion before archiving.", null);
+        }
+
+        var resultsDir = ResolveResultsDirectory(tracked?.ResultsDirectory ?? resultsDirOverride);
+        var normalizedResultsDir = NormalizeDirectoryPath(resultsDir);
+        var runDirectory = BuildRunDirectory(normalizedResultsDir, runId);
+        if (!Directory.Exists(runDirectory))
+        {
+            return new ArchiveRunResult(false, $"Run '{runId}' not found at '{runDirectory}'.", null);
+        }
+
+        var metadata = TrainingRunMetadata.TryLoad(runDirectory);
+        if (metadata is not null && IsKnownTrainingProcessAlive(metadata.ProcessId))
+        {
+            return new ArchiveRunResult(false, $"Run '{runId}' appears to be running (PID {metadata.ProcessId}). Stop the process before archiving.", null);
+        }
+
+        var archiveRoot = Path.Combine(normalizedResultsDir, ArchiveFolderName);
+        var destination = Path.Combine(archiveRoot, runId);
+        if (Directory.Exists(destination))
+        {
+            return new ArchiveRunResult(false, $"Archive target already exists at '{destination}'.", null);
+        }
+
+        var stopResult = StopTensorboardForRun(runDirectory);
+        if (stopResult.Status == StopTensorboardStatus.Failed)
+        {
+            return new ArchiveRunResult(false, stopResult.Message ?? "Unable to stop TensorBoard for this run.", null);
+        }
+
+        try
+        {
+            Directory.CreateDirectory(archiveRoot);
+            Directory.Move(runDirectory, destination);
+        }
+        catch (Exception ex)
+        {
+            if (stopResult.Status == StopTensorboardStatus.NotTracked)
+            {
+                return new ArchiveRunResult(false, $"Move failed. TensorBoard may still be running for this run. Stop it manually and retry. Details: {ex.Message}", null);
+            }
+
+            return new ArchiveRunResult(false, $"Unable to archive run '{runId}': {ex.Message}", null);
+        }
+
+        lock (_syncRoot)
+        {
+            _runs.Remove(runId);
+        }
+
+        return new ArchiveRunResult(true, null, destination);
+    }
+    public TrainingStartResult TryStart(TrainingOptions options)
+    {
+        lock (_syncRoot)
+        {
+            if (_runs.TryGetValue(options.RunId, out var existing) && !existing.IsCompleted)
+            {
+                return TrainingStartResult.Conflict(existing, $"Training run '{options.RunId}' is already in progress.");
+            }
+            var resolvedOptions = ResolveBasePort(options, out var portMessage);
+            if (resolvedOptions is null)
+            {
+                return new TrainingStartResult(false, null, portMessage ?? "Unable to find a free base port for training.");
+            }
+            if (!string.IsNullOrWhiteSpace(portMessage))
+            {
+                Console.WriteLine($"[Train] {portMessage}");
+            }
+            var state = TrainingRunState.StartNew(resolvedOptions);
+            _runs[resolvedOptions.RunId] = state;
+            return new TrainingStartResult(true, state, portMessage);
+        }
+    }
+    public TrainingStartResult TryResume(ResumeRunRequest request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.RunId))
+        {
+            return new TrainingStartResult(false, null, "runId is required.");
+        }
+
+        TrainingRunState? tracked;
+        lock (_syncRoot)
+        {
+            if (_runs.TryGetValue(request.RunId, out tracked) && !tracked.IsCompleted)
+            {
+                return TrainingStartResult.Conflict(tracked, $"Training run '{request.RunId}' is already in progress.");
+            }
+        }
+
+        var requestedResultsDir = ResolveResultsDirectory(request.ResultsDir);
+        var runDirectory = BuildRunDirectory(requestedResultsDir, request.RunId);
+        if (!Directory.Exists(runDirectory))
+        {

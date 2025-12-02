@@ -300,7 +300,7 @@ internal sealed record ArchiveRunResult(bool Success, string? Message, string? A
 internal sealed record ProcessStatusPayload(string ResultsDirectory, int MlagentsLearnProcesses, IReadOnlyList<string> KnownEnvExecutables, IReadOnlyList<string> RunningEnvExecutables);
 internal sealed record KillProcessRequest(string Executable, string? ResultsDir);
 internal sealed record KillProcessResult(string RequestedExecutable, int MatchedProcesses, int KilledProcesses, IReadOnlyList<string> TargetProcesses, IReadOnlyList<string> Errors);
-internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl, string? LogPath, IReadOnlyList<string>? LogTail, TrainingRunParameters? Parameters, bool ResumeOnStart)
+internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl, string? LogPath, IReadOnlyList<string>? LogTail, TrainingRunParameters? Parameters, bool ResumeOnStart, int? ProcessId = null, bool ProcessAlive = false, bool CanResume = false)
 {
     public static TrainingStatusPayload FromFiles(string runId, string resultsDirectory)
     {
@@ -311,22 +311,28 @@ internal sealed record TrainingStatusPayload(string RunId, string Status, bool C
         var metadata = TrainingRunMetadata.TryLoad(runDirectory);
         var parameters = TrainingRunStore.BuildParametersFromMetadata(metadata);
         var resumeOnStart = metadata?.ResumeOnStart ?? false;
+        var processId = metadata?.ProcessId;
+        var processAlive = TrainingRunStore.IsKnownTrainingProcessAlive(processId);
         var stopRequested = metadata?.StopRequested ?? false;
         if (stopRequested && !File.Exists(trainingStatusPath))
         {
-            return new TrainingStatusPayload(runId, Status: "stopped", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, "Training was stopped for later resume.", TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart);
+            return new TrainingStatusPayload(runId, Status: "stopped", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, "Training was stopped for later resume.", TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: true);
         }
         if (File.Exists(trainingStatusPath))
         {
             var statusText = TryReadStatus(trainingStatusPath);
             var normalized = NormalizeStatus(statusText);
-            return new TrainingStatusPayload(runId, normalized, Completed: true, ExitCode: null, resultsDirectory, trainingStatusPath, null, TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart);
+            return new TrainingStatusPayload(runId, normalized, Completed: true, ExitCode: null, resultsDirectory, trainingStatusPath, null, TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: false);
         }
         if (Directory.Exists(runDirectory))
         {
-            return new TrainingStatusPayload(runId, Status: "unknown", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, "Run directory exists but training_status.json has not been written yet.", TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart);
+            var status = processAlive ? "running" : "unknown";
+            var message = processAlive
+                ? $"Training process detected with PID {processId}."
+                : "Run directory exists but training_status.json has not been written yet.";
+            return new TrainingStatusPayload(runId, status, Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, message, TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: !processAlive);
         }
-        return new TrainingStatusPayload(runId, Status: "not-found", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, $"No run data found at '{runDirectory}'.", TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart);
+        return new TrainingStatusPayload(runId, Status: "not-found", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, $"No run data found at '{runDirectory}'.", TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: false);
     }
     private static string NormalizeStatus(string? status)
     {
@@ -1311,7 +1317,7 @@ internal sealed class TrainingRunStore
         return string.Equals(name, ArchiveFolderName, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsKnownTrainingProcessAlive(int? pid)
+    internal static bool IsKnownTrainingProcessAlive(int? pid)
     {
         if (!pid.HasValue || pid.Value <= 0)
         {
@@ -1590,7 +1596,10 @@ internal sealed class TrainingRunState
         var metadata = TrainingRunMetadata.TryLoad(runDirectory);
         var parameters = TrainingRunStore.BuildParametersFromMetadata(metadata) ?? TrainingRunStore.BuildParametersFromOptions(Options);
         var resumeOnStart = metadata?.ResumeOnStart ?? false;
-        return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message, TensorboardUrl, LogPath, logTail, parameters, resumeOnStart);
+        var processId = metadata?.ProcessId;
+        var processAlive = TrainingRunStore.IsKnownTrainingProcessAlive(processId);
+        var canResume = !processAlive && !completed && !string.Equals(status, "running", StringComparison.OrdinalIgnoreCase);
+        return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message, TensorboardUrl, LogPath, logTail, parameters, resumeOnStart, processId, processAlive, canResume);
     }
 }
 internal sealed record TrainingRunMetadata(string? EnvPath, string ConfigPath, string RunId, string ResultsDirectory, string CondaEnvironmentName, int? BasePort, bool NoGraphics, bool SkipConda, bool LaunchTensorboard, bool ResumeOnStart = false, int? ProcessId = null, bool StopRequested = false, bool Resume = false)
@@ -1932,4 +1941,3 @@ internal static class ProcessStatusReader
         }
     }
 }
-
