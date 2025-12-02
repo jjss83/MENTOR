@@ -35,7 +35,7 @@
       letter-spacing: 0.01em;
     }
     .page {
-      max-width: 2000px;
+      max-width: 1200px;
       margin: 0 auto;
       padding: 32px 26px 48px;
     }
@@ -89,7 +89,6 @@
       border: 1px solid var(--stroke);
       border-radius: 12px;
       overflow: hidden;
-      margin: 0 auto;
     }
     .embed-frame iframe {
       width: 100%;
@@ -108,13 +107,6 @@
       min-width: 240px;
       box-shadow: var(--shadow);
     }
-    .tb-controls {
-       display: flex;
-       flex-wrap: wrap;
-       gap: 10px;
-       align-items: center;
-       margin: 10px 0 4px;
-     }
     .slider-label {
       display: flex;
       flex-direction: column;
@@ -258,6 +250,70 @@
       gap: 12px;
       align-items: flex-start;
     }
+    .process-tables {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
+    .table-block {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: var(--shadow);
+    }
+    .table-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .table-wrap {
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .process-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .process-table th,
+    .process-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .process-table thead {
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 12px;
+      letter-spacing: 0.01em;
+      color: var(--muted);
+    }
+    .process-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 12px;
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .badge.success .badge-dot { background: var(--success); }
+    .badge.alert .badge-dot { background: var(--error); }
+    .badge.idle .badge-dot { background: #94a3b8; }
+    .muted { color: var(--muted); }
     .micro-label { color: var(--muted); font-size: 12px; margin-top: 6px; }
     .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .chip {
@@ -376,6 +432,7 @@
     .status-succeeded .status-dot { background: var(--success); }
     .status-failed .status-dot { background: var(--error); }
     .status-canceled .status-dot { background: var(--warning); }
+    .status-stopped .status-dot { background: var(--muted); }
     .status-unknown .status-dot { background: #94a3b8; }
     .status-not-found .status-dot { background: #94a3b8; }
     .meta-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
@@ -404,45 +461,6 @@
       justify-content: flex-end;
       margin-top: 6px;
     }
-    .detail-text {
-      width: 100%;
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid var(--stroke);
-      border-radius: 12px;
-      color: #dfe5f5;
-      font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
-      font-size: 12px;
-      line-height: 1.55;
-      padding: 10px 12px;
-      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
-      column-width: 420px;
-      column-gap: 16px;
-      word-break: break-word;
-      white-space: normal;
-    }
-    .detail-list {
-      display: block;
-    }
-    .detail-line {
-      display: block;
-      break-inside: avoid;
-      border-left: 2px solid var(--stroke);
-      padding-left: 10px;
-      margin-bottom: 6px;
-    }
-    .detail-key {
-      color: var(--muted);
-      min-width: 140px;
-      display: inline-block;
-      margin-right: 6px;
-    }
-    .detail-value {
-      color: #e7e9ee;
-      word-break: break-word;
-    }
-    .detail-value.positive { color: var(--success); }
-    .detail-value.warning { color: var(--warning); }
-    .detail-value.negative { color: var(--error); }
     .log-actions button {
       padding: 8px 12px;
       border-radius: 10px;
@@ -483,8 +501,23 @@
             </div>
             <input id="refresh-slider" type="range" min="1" max="10" step="1" value="5" aria-label="Refresh cadence (seconds)" />
           </div>
-        <button id="refresh" class="secondary">Refresh now</button>
-      </div>
+          <div class="slider-wrap" aria-label="TensorBoard height">
+            <div class="slider-label">
+              <div class="label">TensorBoard height</div>
+              <div class="slider-value"><span id="embed-height-value">360</span>px</div>
+            </div>
+            <input id="embed-height-slider" type="range" min="240" max="800" step="20" value="360" aria-label="TensorBoard height (px)" />
+          </div>
+          <div class="slider-wrap" aria-label="Run log height">
+            <div class="slider-label">
+              <div class="label">Run log height</div>
+              <div class="slider-value"><span id="log-height-value">140</span>px</div>
+            </div>
+            <input id="log-height-slider" type="range" min="100" max="400" step="20" value="140" aria-label="Run log height (px)" />
+          </div>
+          <button id="set-api">Set API</button>
+          <button id="refresh" class="secondary">Refresh now</button>
+        </div>
       </div>
       <div class="status-row">
         <div class="tile">
@@ -512,23 +545,9 @@
     <main>
       <section id="tensorboard-embed" class="embed-card" hidden>
         <div class="section-head">
-          <div>
-            <div class="section-title">TensorBoard - Environment / Cumulative Reward</div>
-            <div class="section-note" id="tensorboard-note"></div>
-          </div>
-          <div class="pill-row">
-            <button id="toggle-tensorboard" class="secondary">Collapse</button>
-            <button id="start-tensorboard" class="secondary">Start TensorBoard</button>
-          </div>
-        </div>
-        <div class="tb-controls">
-          <div class="slider-wrap" aria-label="TensorBoard height">
-            <div class="slider-label">
-              <div class="label">TensorBoard height</div>
-              <div class="slider-value"><span id="embed-height-value">360</span>px</div>
-            </div>
-            <input id="embed-height-slider" type="range" min="240" max="1200" step="20" value="360" aria-label="TensorBoard height (px)" />
-          </div>
+          <div class="section-title">TensorBoard - Environment / Cumulative Reward</div>
+          <div class="section-note" id="tensorboard-note"></div>
+          <button id="start-tensorboard" class="secondary">Start TensorBoard</button>
         </div>
         <div class="embed-frame">
           <iframe id="tensorboard-frame" title="TensorBoard Environment Cumulative Reward"></iframe>
@@ -557,16 +576,45 @@
           <div class="section-title">Process watch</div>
           <div class="section-note" id="process-note">Waiting for first update...</div>
         </div>
-        <div class="process-row">
-          <div>
-            <div class="pill-label">mlagents-learn.exe</div>
-            <div class="pill-value" id="mlagents-count">0</div>
-            <div class="micro-label" id="mlagents-note">processes running</div>
+        <div class="process-tables">
+          <div class="table-block">
+            <div class="table-head">
+              <div class="table-title">ML-Agents learn</div>
+              <div class="micro-label" id="mlagents-note">Awaiting data...</div>
+            </div>
+            <div class="table-wrap">
+              <table class="process-table">
+                <thead>
+                  <tr>
+                    <th>Executable</th>
+                    <th>Status</th>
+                    <th>Running</th>
+                  </tr>
+                </thead>
+                <tbody id="mlagents-table-body">
+                  <tr><td colspan="3" class="muted">Waiting for process info...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div>
-            <div class="pill-label">Environment executables</div>
-            <div id="env-running" class="chip-row"></div>
-            <div class="micro-label" id="env-note">Discovering env executables from results folders.</div>
+          <div class="table-block">
+            <div class="table-head">
+              <div class="table-title">Environment executables</div>
+              <div class="micro-label" id="env-note">Discovering env executables from results folders.</div>
+            </div>
+            <div class="table-wrap">
+              <table class="process-table">
+                <thead>
+                  <tr>
+                    <th>Executable</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="env-table-body">
+                  <tr><td colspan="2" class="muted">Waiting for process info...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
         <div class="action-row">
@@ -578,16 +626,6 @@
             <button id="kill-btn" class="secondary">Kill all</button>
           </div>
           <div class="micro-label" id="kill-note">Choose an executable to terminate its running processes.</div>
-        </div>
-      </section>
-
-      <section>
-        <div class="slider-wrap" aria-label="Run log height">
-          <div class="slider-label">
-            <div class="label">Run log height</div>
-            <div class="slider-value"><span id="log-height-value">140</span>px</div>
-          </div>
-          <input id="log-height-slider" type="range" min="100" max="1200" step="20" value="140" aria-label="Run log height (px)" />
         </div>
       </section>
 
@@ -620,10 +658,6 @@
         lastRuns: [],
         tensorboardUrl: null,
         forceTensorboardReload: false,
-        tensorboardCollapsed: false,
-        tensorboardRunning: false,
-        tensorboardManual: false,
-        tensorboardStatusRunning: false,
       };
 
       const defaultTensorboardUrl = 'http://localhost:6006/';
@@ -634,12 +668,12 @@
       }
 
       const storedEmbedHeight = Number(localStorage.getItem('mentorEmbedHeight'));
-      if (storedEmbedHeight >= 240 && storedEmbedHeight <= 1200) {
+      if (storedEmbedHeight >= 240 && storedEmbedHeight <= 800) {
         state.embedHeight = storedEmbedHeight;
       }
 
       const storedLogHeight = Number(localStorage.getItem('mentorLogHeight'));
-      if (storedLogHeight >= 100 && storedLogHeight <= 1200) {
+      if (storedLogHeight >= 100 && storedLogHeight <= 400) {
         state.logHeight = storedLogHeight;
       }
 
@@ -658,7 +692,6 @@
         tbSection: document.getElementById('tensorboard-embed'),
         tbFrame: document.getElementById('tensorboard-frame'),
         tbNote: document.getElementById('tensorboard-note'),
-        tbToggle: document.getElementById('toggle-tensorboard'),
         tbStart: document.getElementById('start-tensorboard'),
         runGrid: document.getElementById('run-grid'),
         runsNote: document.getElementById('runs-note'),
@@ -668,14 +701,15 @@
         completedCount: document.getElementById('completed-count'),
         failedCount: document.getElementById('failed-count'),
         processNote: document.getElementById('process-note'),
-        mlagentsCount: document.getElementById('mlagents-count'),
         mlagentsNote: document.getElementById('mlagents-note'),
-        envRunning: document.getElementById('env-running'),
+        mlagentsTableBody: document.getElementById('mlagents-table-body'),
+        envTableBody: document.getElementById('env-table-body'),
         envNote: document.getElementById('env-note'),
         killSelect: document.getElementById('kill-select'),
         killBtn: document.getElementById('kill-btn'),
         killNote: document.getElementById('kill-note'),
         refreshBtn: document.getElementById('refresh'),
+        setApiBtn: document.getElementById('set-api'),
       };
 
       const pick = (obj, key) => obj?.[key] ?? obj?.[key.charAt(0).toUpperCase() + key.slice(1)];
@@ -710,18 +744,17 @@
 
       function setEmbedHeight(px) {
         const fallback = state.embedHeight;
-        const value = Math.min(1200, Math.max(240, Number(px) || fallback));
+        const value = Math.min(800, Math.max(240, Number(px) || fallback));
         state.embedHeight = value;
         localStorage.setItem('mentorEmbedHeight', value);
         el.embedHeightSlider.value = value;
         el.embedHeightValue.textContent = value;
         document.documentElement.style.setProperty('--embed-height', `${value}px`);
-        state.forceTensorboardReload = true;
       }
 
       function setLogHeight(px) {
         const fallback = state.logHeight;
-        const value = Math.min(1200, Math.max(100, Number(px) || fallback));
+        const value = Math.min(400, Math.max(100, Number(px) || fallback));
         state.logHeight = value;
         localStorage.setItem('mentorLogHeight', value);
         el.logHeightSlider.value = value;
@@ -835,6 +868,8 @@
       function statusClass(status) {
         const normalized = (status || '').toLowerCase();
         if (normalized === 'running') return 'status-running';
+        if (normalized === 'stopping') return 'status-canceled';
+        if (normalized === 'stopped') return 'status-stopped';
         if (normalized === 'succeeded' || normalized === 'success' || normalized === 'completed') return 'status-succeeded';
         if (normalized === 'failed' || normalized === 'failure') return 'status-failed';
         if (normalized === 'canceled' || normalized === 'cancelled') return 'status-canceled';
@@ -850,7 +885,7 @@
           div.textContent = errorMessage;
           el.runGrid.appendChild(div);
           setCounts([]);
-          renderTensorboard([], state.forceTensorboardReload);
+          renderTensorboard([]);
           state.hiddenRuns.clear();
           state.lastRuns = [];
           updateSelectionChip();
@@ -864,7 +899,7 @@
           div.textContent = 'No runs yet. Kick off training to see status here.';
           el.runGrid.appendChild(div);
           setCounts([]);
-          renderTensorboard([], state.forceTensorboardReload);
+          renderTensorboard([]);
           state.hiddenRuns.clear();
           updateSelectionChip();
           return;
@@ -886,15 +921,8 @@
         header.className = 'card-header';
         const runId = pick(run, 'runId') || 'Unknown run';
         const runParams = pick(run, 'parameters') || {};
+        const resumeFlag = pick(run, 'resumeOnStart') ?? pick(runParams, 'resumeOnStart');
         const isCompleted = !!pick(run, 'completed');
-        const statusText = pick(run, 'status');
-        const normalizedStatus = (statusText || '').toLowerCase();
-        const processId = pick(run, 'processId');
-        const processAlive = !!pick(run, 'processAlive');
-        const canResumeFlag = pick(run, 'canResume');
-        const canResume = typeof canResumeFlag === 'boolean'
-          ? canResumeFlag
-          : (!processAlive && !isCompleted && normalizedStatus !== 'running');
         const logPath = deriveLogPath(run);
         const logUrl = toFileUrl(logPath) ?? logPath;
         const selection = document.createElement('input');
@@ -913,6 +941,7 @@
         toggleLabel.className = 'pill-label';
         toggleLabel.textContent = 'Details';
         const chip = document.createElement('div');
+        const statusText = pick(run, 'status');
         const sClass = statusClass(statusText);
         chip.className = `status-chip ${sClass}`;
         const dot = document.createElement('span');
@@ -925,63 +954,82 @@
         selectionWrap.style.alignItems = 'center';
         selectionWrap.style.gap = '6px';
         selectionWrap.append(selection, toggleLabel);
-        const resumeBtn = createResumeButton(run, canResume);
         const archiveBtn = createArchiveButton(runId);
+        const stopBtn = createStopButton(runId, statusText, run);
+        const resumeBtn = createResumeButton(runId, statusText, isCompleted, run);
         const actions = document.createElement('div');
         actions.className = 'card-actions';
-        if (resumeBtn) {
-          actions.append(resumeBtn);
-        }
+        if (stopBtn) actions.append(stopBtn);
+        if (resumeBtn) actions.append(resumeBtn);
         actions.append(archiveBtn, chip);
         header.append(selectionWrap, id, actions);
 
-        const detailLines = [
-          { key: 'Run', value: runId },
-          { key: 'Status', value: statusText || 'unknown' },
-          { key: 'Completed', value: isCompleted ? 'Yes' : 'No' },
-          { key: 'Results', value: pick(run, 'resultsDirectory') || '-' },
-          { key: 'Training status', value: pick(run, 'trainingStatusPath') || '-' },
-          { key: 'TensorBoard', value: pick(run, 'tensorboardUrl') || '-' },
-          { key: 'Log path', value: logPath || '-' },
-          { key: 'Exit code', value: pick(run, 'exitCode') ?? '-' },
-          { key: 'Process ID', value: processId ?? '-' },
-          { key: 'Process alive', value: formatFlag(processAlive, 'Yes', 'No') },
-          { key: 'Can resume', value: formatFlag(canResume, 'Yes', 'No') },
-          { key: 'Env path', value: pick(runParams, 'envPath') || '-' },
-          { key: 'Config', value: pick(runParams, 'configPath') || '-' },
-          { key: 'Conda env', value: pick(runParams, 'condaEnv') || '-' },
-          { key: 'Base port', value: pick(runParams, 'basePort') ?? '-' },
-          { key: 'Graphics', value: formatFlag(pick(runParams, 'noGraphics'), 'No graphics', 'Graphics enabled') },
-          { key: 'Env executable', value: formatFlag(pick(runParams, 'hasEnvExecutable'), 'Yes', 'No') },
-          { key: 'Skip conda', value: formatFlag(pick(runParams, 'skipConda'), 'Skip', 'Use conda') },
-          { key: 'Launch TensorBoard', value: formatFlag(pick(runParams, 'tensorboard'), 'Yes', 'No') },
-          { key: 'Resume flag', value: formatFlag(pick(runParams, 'resume'), 'Yes', 'No') },
-        ];
-        const detailArea = document.createElement('div');
-        detailArea.className = 'detail-text detail-list';
-        detailArea.setAttribute('role', 'textbox');
-        detailArea.setAttribute('aria-readonly', 'true');
-        detailArea.setAttribute('aria-label', `Details for ${runId}`);
-        detailLines.forEach(line => {
-          const row = document.createElement('div');
-          row.className = 'detail-line';
-          const keySpan = document.createElement('span');
-          keySpan.className = 'detail-key';
-          keySpan.textContent = `${line.key}:`;
-          const valueSpan = document.createElement('span');
-          valueSpan.className = 'detail-value';
-          valueSpan.textContent = line.value ?? '-';
-          const lower = String(line.value ?? '').toLowerCase();
-          if (['running', 'yes', 'true'].includes(lower) || lower === 'graphics enabled') {
-            valueSpan.classList.add('positive');
-          } else if (['failed', 'failure', 'not-found', 'unknown'].includes(lower) || lower.startsWith('no ')) {
-            valueSpan.classList.add('negative');
-          } else if (lower === '-' || lower === 'skip') {
-            valueSpan.classList.add('warning');
+        const metaRow = document.createElement('div');
+        metaRow.className = 'meta-row';
+        metaRow.append(
+          createMeta('Results', pick(run, 'resultsDirectory') || '-'),
+          createMeta('Training status', pick(run, 'trainingStatusPath') || '-'),
+          createMeta('TensorBoard URL', pick(run, 'tensorboardUrl') || '-'),
+          createMeta('Log path', logPath || '-'),
+          createMeta('Exit code', pick(run, 'exitCode') ?? '-')
+        );
+
+        const paramsRow = document.createElement('div');
+        paramsRow.className = 'meta-row';
+        paramsRow.append(
+          createMeta('Env path', pick(runParams, 'envPath') || '-'),
+          createMeta('Config', pick(runParams, 'configPath') || '-'),
+          createMeta('Conda env', pick(runParams, 'condaEnv') || '-'),
+          createMeta('Base port', pick(runParams, 'basePort') ?? '-'),
+          createMeta('Graphics', formatFlag(pick(runParams, 'noGraphics'), 'No graphics', 'Graphics enabled')),
+          createMeta('Env executable', formatFlag(pick(runParams, 'hasEnvExecutable'), 'Yes', 'No')),
+          createMeta('Skip conda', formatFlag(pick(runParams, 'skipConda'), 'Skip', 'Use conda')),
+          createMeta('Launch TensorBoard', formatFlag(pick(runParams, 'tensorboard'), 'Yes', 'No')),
+          createMeta('Resume on start', formatFlag(resumeFlag, 'Resume enabled', 'Start fresh'))
+        );
+        const resumeRow = document.createElement('div');
+        resumeRow.className = 'meta';
+        const resumeLabel = document.createElement('div');
+        resumeLabel.className = 'label';
+        resumeLabel.textContent = 'Resume on API start';
+        const resumeControl = document.createElement('div');
+        resumeControl.style.display = 'flex';
+        resumeControl.style.alignItems = 'center';
+        resumeControl.style.gap = '8px';
+        const resumeToggle = document.createElement('input');
+        resumeToggle.type = 'checkbox';
+        resumeToggle.checked = isCompleted ? false : !!resumeFlag;
+        resumeToggle.addEventListener('click', (event) => event.stopPropagation());
+        const resumeNote = document.createElement('div');
+        resumeNote.className = 'pill-label';
+        if (isCompleted) {
+          resumeToggle.disabled = true;
+          resumeNote.textContent = 'Completed runs cannot auto-resume';
+        } else {
+          resumeNote.textContent = resumeToggle.checked ? 'Will resume automatically' : 'Disabled by default';
+        }
+        resumeToggle.addEventListener('change', async (event) => {
+          if (isCompleted) {
+            event.preventDefault();
+            return;
           }
-          row.append(keySpan, valueSpan);
-          detailArea.append(row);
+          const desired = event.target.checked;
+          resumeToggle.disabled = true;
+          resumeNote.textContent = desired ? 'Marking...' : 'Updating...';
+          try {
+            await postJson(`${state.apiBase}/train/resume-flag`, { runId, resumeOnStart: desired, resultsDir: pick(run, 'resultsDirectory') });
+            resumeNote.textContent = desired ? 'Will resume automatically' : 'Will not auto-resume';
+            await refreshAll();
+          } catch (err) {
+            console.error(err);
+            resumeToggle.checked = !desired;
+            resumeNote.textContent = err?.message || 'Failed to update';
+          } finally {
+            resumeToggle.disabled = false;
+          }
         });
+        resumeControl.append(resumeToggle, resumeNote);
+        resumeRow.append(resumeLabel, resumeControl);
 
         const log = document.createElement('div');
         log.className = 'log';
@@ -1018,9 +1066,9 @@
           const text = document.createElement('div');
           text.textContent = message;
           msg.append(labelEl, text);
-          detailsWrap.append(detailArea, msg, log, logActions);
+          detailsWrap.append(metaRow, paramsRow, resumeRow, msg, log, logActions);
         } else {
-          detailsWrap.append(detailArea, log, logActions);
+          detailsWrap.append(metaRow, paramsRow, resumeRow, log, logActions);
         }
 
         detailsWrap.hidden = !detailsVisible;
@@ -1031,38 +1079,36 @@
           card.classList.add('selected');
         }
 
-        card.addEventListener('click', () => {
-          const next = state.hiddenRuns.has(runId);
-          selection.checked = next;
-          toggleRunSelection(runId, next);
-        });
         return card;
       }
 
-      const terminalStatuses = new Set(['succeeded', 'success', 'completed', 'failed', 'failure', 'canceled', 'cancelled']);
-
-      function createResumeButton(run, canResumeOverride) {
-        const runId = pick(run, 'runId');
-        const status = (pick(run, 'status') || '').toLowerCase();
-        const completed = !!pick(run, 'completed');
-        const processAlive = !!pick(run, 'processAlive');
-        const canResumeFlag = typeof canResumeOverride === 'boolean' ? canResumeOverride : pick(run, 'canResume');
-        const canResume = typeof canResumeFlag === 'boolean'
-          ? canResumeFlag
-          : (!processAlive && !completed && status !== 'running');
-        const effectiveCanResume = canResume && !terminalStatuses.has(status) && !completed;
-        if (!effectiveCanResume) {
-          return null;
-        }
-
+      function createStopButton(runId, statusText, run) {
+        const normalized = (statusText || '').toLowerCase();
+        if (normalized !== 'running') return null;
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'secondary';
-        btn.textContent = 'Resume';
-        btn.title = `Resume ${runId}`;
+        btn.className = 'icon-btn secondary';
+        btn.title = `Stop ${runId} for resume`;
+        btn.textContent = 'Stop';
         btn.addEventListener('click', async (event) => {
           event.stopPropagation();
-          await resumeRun(runId, btn);
+          await stopRun(runId, btn, pick(run, 'resultsDirectory'));
+        });
+        return btn;
+      }
+
+      function createResumeButton(runId, statusText, isCompleted, run) {
+        const normalized = (statusText || '').toLowerCase();
+        const canResume = !isCompleted && normalized !== 'running' && normalized !== 'stopping';
+        if (!canResume) return null;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'icon-btn';
+        btn.title = `Resume ${runId}`;
+        btn.textContent = 'Resume';
+        btn.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          await resumeRun(runId, btn, pick(run, 'resultsDirectory'));
         });
         return btn;
       }
@@ -1086,6 +1132,18 @@
         return '-';
       }
 
+      function createMeta(label, value) {
+        const wrap = document.createElement('div');
+        wrap.className = 'meta';
+        const l = document.createElement('div');
+        l.className = 'label';
+        l.textContent = label;
+        const v = document.createElement('div');
+        v.textContent = value;
+        wrap.append(l, v);
+        return wrap;
+      }
+
       function toggleRunSelection(runId, selected) {
         if (!runId) return;
         if (selected) {
@@ -1107,20 +1165,23 @@
         });
       }
 
-      async function resumeRun(runId, button) {
+      async function stopRun(runId, button, resultsDir) {
         if (!runId) return;
-        const originalText = button?.textContent;
+        const original = button?.textContent;
         if (button) {
           button.disabled = true;
-          button.textContent = 'Resuming...';
+          button.classList.add('spinning');
+          button.textContent = 'Stopping...';
         }
         try {
-          await postJson(`${state.apiBase}/train/resume`, { runId });
+          const payload = { runId };
+          if (resultsDir) payload.resultsDir = resultsDir;
+          const data = await postJson(`${state.apiBase}/train/stop`, payload);
+          el.runsNote.textContent = pick(data, 'message') || `Stop requested for ${runId}.`;
           await refreshAll();
         } catch (err) {
           console.error(err);
-          const message = (err?.message || 'Failed to resume run.').trim();
-          el.runsNote.textContent = message;
+          el.runsNote.textContent = err?.message || 'Failed to stop run.';
           if (button) {
             button.classList.add('error');
             setTimeout(() => button.classList.remove('error'), 1400);
@@ -1128,7 +1189,38 @@
         } finally {
           if (button) {
             button.disabled = false;
-            button.textContent = originalText || 'Resume';
+            button.classList.remove('spinning');
+            if (original) button.textContent = original;
+          }
+        }
+      }
+
+      async function resumeRun(runId, button, resultsDir) {
+        if (!runId) return;
+        const original = button?.textContent;
+        if (button) {
+          button.disabled = true;
+          button.classList.add('spinning');
+          button.textContent = 'Resuming...';
+        }
+        try {
+          const payload = { runId };
+          if (resultsDir) payload.resultsDir = resultsDir;
+          const data = await postJson(`${state.apiBase}/train/resume`, payload);
+          el.runsNote.textContent = pick(data, 'message') || `Resuming ${runId}...`;
+          await refreshAll();
+        } catch (err) {
+          console.error(err);
+          el.runsNote.textContent = err?.message || 'Failed to resume run.';
+          if (button) {
+            button.classList.add('error');
+            setTimeout(() => button.classList.remove('error'), 1400);
+          }
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.classList.remove('spinning');
+            if (original) button.textContent = original;
           }
         }
       }
@@ -1163,59 +1255,24 @@
         const list = Array.isArray(runs) ? runs : [];
         const withTb = list.find(r => pick(r, 'tensorboardUrl'));
         const url = withTb ? pick(withTb, 'tensorboardUrl') : defaultTensorboardUrl;
-        const runningFromRuns = Boolean(withTb);
         const note = withTb ? `From run ${pick(withTb, 'runId') || 'unknown'}` : 'Default (localhost:6006)';
-        state.tensorboardRunning = runningFromRuns || state.tensorboardManual || state.tensorboardStatusRunning;
-        if (runningFromRuns) {
-          state.tensorboardManual = false;
-        }
-
         if (!url) {
           el.tbSection.hidden = true;
           el.tbFrame.removeAttribute('src');
           state.tensorboardUrl = null;
-          updateTensorboardControls();
           return;
         }
         const current = el.tbFrame.getAttribute('src');
         const shouldReload = forceReload || current !== url;
         if (shouldReload) {
-          const resetUrl = 'about:blank';
-          el.tbFrame.setAttribute('src', resetUrl);
-          setTimeout(() => {
-            el.tbFrame.setAttribute('src', url);
-          }, 0);
+          if (current === url) {
+            el.tbFrame.setAttribute('src', '');
+          }
+          el.tbFrame.setAttribute('src', url);
         }
         state.tensorboardUrl = url;
         el.tbNote.textContent = note;
         el.tbSection.hidden = false;
-        el.tbToggle.textContent = state.tensorboardCollapsed ? 'Expand' : 'Collapse';
-        el.tbFrame.closest('.embed-frame').style.display = state.tensorboardCollapsed ? 'none' : 'block';
-        document.querySelector('.tb-controls')?.classList.toggle('collapsed', state.tensorboardCollapsed);
-        updateTensorboardControls();
-      }
-
-      function updateTensorboardControls() {
-        if (el.tbStart) {
-          el.tbStart.hidden = state.tensorboardRunning;
-        }
-      }
-
-      async function updateTensorboardStatus() {
-        try {
-          const data = await fetchJson(`${state.apiBase}/tensorboard/status`);
-          const running = Boolean(pick(data, 'running'));
-          state.tensorboardStatusRunning = running;
-          if (running && pick(data, 'runId')) {
-            state.tensorboardManual = false;
-          }
-          if (!running) {
-            state.tensorboardManual = false;
-          }
-          updateTensorboardControls();
-        } catch (err) {
-          console.error(err);
-        }
       }
 
       async function startTensorboard() {
@@ -1236,9 +1293,6 @@
             el.tbSection.hidden = false;
           }
           el.tbNote.textContent = message;
-          state.tensorboardManual = true;
-          state.tensorboardRunning = true;
-          updateTensorboardControls();
           await refreshAll();
         } catch (err) {
           console.error(err);
@@ -1298,20 +1352,25 @@
 
         const count = Number(pick(data, 'mlagentsLearnProcesses') ?? 0);
         const safeCount = Number.isFinite(count) ? count : 0;
-        el.mlagentsCount.textContent = safeCount;
         el.mlagentsNote.textContent = `${safeCount === 1 ? 'process' : 'processes'} running`;
 
-        el.envRunning.innerHTML = '';
         if (processError) {
-          const chip = document.createElement('div');
-          chip.className = 'chip alert';
-          chip.textContent = 'Process info unavailable';
-          el.envRunning.append(chip);
+          el.mlagentsTableBody.innerHTML = `<tr><td colspan="3" class="muted">Process info unavailable.</td></tr>`;
+          el.envTableBody.innerHTML = `<tr><td colspan="2" class="muted">Process info unavailable.</td></tr>`;
           el.envNote.textContent = 'Refresh or verify the API to restore process visibility.';
           state.knownEnvExecutables = [];
           updateKillOptions(state.knownEnvExecutables);
           return;
         }
+
+        el.mlagentsTableBody.innerHTML = '';
+        const mlRow = document.createElement('tr');
+        mlRow.innerHTML = `
+          <td>mlagents-learn.exe</td>
+          <td><span class="badge ${safeCount > 0 ? 'success' : 'idle'}"><span class="badge-dot"></span>${safeCount > 0 ? 'Running' : 'Idle'}</span></td>
+          <td>${safeCount}</td>
+        `;
+        el.mlagentsTableBody.append(mlRow);
 
         const running = (() => {
           const value = pick(data, 'runningEnvExecutables');
@@ -1322,20 +1381,23 @@
           return Array.isArray(value) ? value.filter(Boolean) : [];
         })();
 
+        const merged = Array.from(new Set([...known, ...running])).filter(Boolean);
         state.knownEnvExecutables = known;
         updateKillOptions(state.knownEnvExecutables);
 
-        if (!running.length) {
-          const chip = document.createElement('div');
-          chip.className = 'chip';
-          chip.textContent = 'No env executables running';
-          el.envRunning.append(chip);
+        el.envTableBody.innerHTML = '';
+        if (!merged.length) {
+          el.envTableBody.innerHTML = `<tr><td colspan="2" class="muted">No env executables discovered yet.</td></tr>`;
         } else {
-          running.forEach(name => {
-            const chip = document.createElement('div');
-            chip.className = 'chip';
-            chip.textContent = name;
-            el.envRunning.append(chip);
+          merged.sort((a, b) => a.localeCompare(b));
+          merged.forEach(name => {
+            const isRunning = running.includes(name);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${name}</td>
+              <td><span class="badge ${isRunning ? 'success' : 'idle'}"><span class="badge-dot"></span>${isRunning ? 'Running' : 'Idle'}</span></td>
+            `;
+            el.envTableBody.append(row);
           });
         }
 
@@ -1392,8 +1454,7 @@
             console.error(err);
             renderRuns([], 'Unable to load runs.');
           }),
-          updateProcessStatus().catch(() => {}),
-          updateTensorboardStatus().catch(() => {})
+          updateProcessStatus().catch(() => {})
         ]);
         const now = new Date();
         el.updatedLabel.textContent = now.toLocaleTimeString();
@@ -1443,23 +1504,12 @@
       el.logHeightSlider.addEventListener('input', (event) => {
         setLogHeight(event.target.value);
       });
-      const applyApiBase = () => {
-        state.forceTensorboardReload = true;
+      el.setApiBtn.addEventListener('click', () => {
         setApiBase(el.apiInput.value);
         refreshAll();
         scheduleNextRefresh();
-      };
-      el.apiInput.addEventListener('change', applyApiBase);
-      el.apiInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-          applyApiBase();
-        }
       });
       el.tbStart?.addEventListener('click', startTensorboard);
-      el.tbToggle?.addEventListener('click', () => {
-        state.tensorboardCollapsed = !state.tensorboardCollapsed;
-        renderTensorboard(state.lastRuns, true);
-      });
       el.killBtn.addEventListener('click', killSelectedExecutable);
       el.clearSelection.addEventListener('click', () => {
         state.hiddenRuns.clear();
@@ -1472,7 +1522,6 @@
         });
         document.querySelectorAll('.card input[type="checkbox"]').forEach(cb => { cb.checked = true; });
       });
-      updateTensorboardControls();
       startLoop();
     })();
   </script>

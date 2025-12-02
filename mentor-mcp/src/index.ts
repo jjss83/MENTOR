@@ -23,6 +23,12 @@ const trainingSchema = z.object({
   resume: z.boolean().optional(),
 });
 
+const resumeFlagSchema = z.object({
+  runId: z.string(),
+  resumeOnStart: z.boolean(),
+  resultsDir: z.string().optional(),
+});
+
 const trainStatusSchema = z.object({
   runId: z.string().optional(),
   resultsDir: z.string().optional(),
@@ -41,6 +47,11 @@ const resumeSchema = z.object({
   runId: z.string(),
   resultsDir: z.string().optional(),
   basePort: z.number().int().optional(),
+});
+
+const runControlSchema = z.object({
+  runId: z.string(),
+  resultsDir: z.string().optional(),
 });
 
 const archiveSchema = z.object({
@@ -70,6 +81,42 @@ server.registerTool(
 );
 
 server.registerTool(
+  "dashboard-status",
+  {
+    description: "Check mentor web dashboard exposure status",
+    inputSchema: z.object({}),
+  },
+  async () => {
+    const json = await getJson<unknown>("/dashboard/status");
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "dashboard-start",
+  {
+    description: "Ensure mentor web dashboard is served over http://localhost:4173",
+    inputSchema: z.object({}),
+  },
+  async () => {
+    const json = await getJson<unknown>("/dashboard/start");
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "dashboard-stop",
+  {
+    description: "Stop the mentor web dashboard server",
+    inputSchema: z.object({}),
+  },
+  async () => {
+    const json = await postJson<unknown>("/dashboard/stop", {});
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
   "train",
   {
     description: "Start mentor-cli training via mentor-api and return run info",
@@ -82,9 +129,33 @@ server.registerTool(
 );
 
 server.registerTool(
+  "resume-flag",
+  {
+    description: "Update resume-on-start flag for a training run via mentor-api",
+    inputSchema: resumeFlagSchema,
+  },
+  async (input) => {
+    const json = await postJson<unknown>("/train/resume-flag", normalizeBody(input));
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "train-stop",
+  {
+    description: "Gracefully stop a running training session via mentor-api (marks it resumable)",
+    inputSchema: runControlSchema,
+  },
+  async (input) => {
+    const json = await postJson<unknown>("/train/stop", normalizeBody(input));
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
   "train-resume",
   {
-    description: "Resume a mentor-cli training run via mentor-api using stored run metadata",
+    description: "Resume a stopped or unfinished training session via mentor-api",
     inputSchema: resumeSchema,
   },
   async (input) => {
