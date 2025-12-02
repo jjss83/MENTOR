@@ -64,6 +64,31 @@ internal sealed class TrainingSessionRunner
         TryTerminateProcessTree(_mlAgentsProcess);
     }
 
+    public void RequestStop(TimeSpan? gracefulWait = null)
+    {
+        if (_cancelRequested)
+        {
+            return;
+        }
+
+        _cancelRequested = true;
+        var process = _mlAgentsProcess;
+        if (process is null || process.HasExited)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            var waitFor = gracefulWait ?? TimeSpan.FromSeconds(8);
+            var exited = await TryRequestExitAsync(process, waitFor).ConfigureAwait(false);
+            if (!exited)
+            {
+                TryTerminateProcessTree(process);
+            }
+        });
+    }
+
     public async Task<int> RunAsync()
     {
         Directory.CreateDirectory(_options.ResultsDirectory);
@@ -383,6 +408,36 @@ internal sealed class TrainingSessionRunner
         {
             WriteError($"Failed to terminate training process: {ex.Message}");
         }
+    }
+
+    private static async Task<bool> TryRequestExitAsync(Process process, TimeSpan timeout)
+    {
+        try
+        {
+            process.CloseMainWindow();
+        }
+        catch
+        {
+            // ignore inability to close window
+        }
+
+        try
+        {
+            var waitTask = process.WaitForExitAsync();
+            var delayTask = Task.Delay(timeout);
+            var completed = await Task.WhenAny(waitTask, delayTask).ConfigureAwait(false);
+            if (completed == waitTask)
+            {
+                await waitTask.ConfigureAwait(false);
+                return true;
+            }
+        }
+        catch
+        {
+            // fall back to termination
+        }
+
+        return process.HasExited;
     }
 
     private void WriteLine(string? message = null)
