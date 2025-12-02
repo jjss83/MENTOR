@@ -20,6 +20,7 @@ const trainingSchema = z.object({
   noGraphics: z.boolean().optional(),
   skipConda: z.boolean().optional(),
   tensorboard: z.boolean().optional(),
+  resume: z.boolean().optional(),
 });
 
 const trainStatusSchema = z.object({
@@ -36,9 +37,14 @@ const killProcessSchema = z.object({
   resultsDir: z.string().optional(),
 });
 
-const resumeFlagSchema = z.object({
+const resumeSchema = z.object({
   runId: z.string(),
-  resumeOnStart: z.boolean(),
+  resultsDir: z.string().optional(),
+  basePort: z.number().int().optional(),
+});
+
+const archiveSchema = z.object({
+  runId: z.string(),
   resultsDir: z.string().optional(),
 });
 
@@ -48,6 +54,10 @@ const tensorboardStartSchema = z.object({
   condaEnv: z.string().optional(),
   skipConda: z.boolean().optional(),
   port: z.number().int().optional(),
+});
+
+const tensorboardStatusSchema = z.object({
+  resultsDir: z.string().optional(),
 });
 
 server.registerTool(
@@ -67,6 +77,30 @@ server.registerTool(
   },
   async (input) => {
     const json = await postJson<unknown>("/train", normalizeBody(input));
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "train-resume",
+  {
+    description: "Resume a mentor-cli training run via mentor-api using stored run metadata",
+    inputSchema: resumeSchema,
+  },
+  async (input) => {
+    const json = await postJson<unknown>("/train/resume", normalizeBody(input));
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "train-archive",
+  {
+    description: "Archive a completed mentor-cli training run via mentor-api",
+    inputSchema: archiveSchema,
+  },
+  async (input) => {
+    const json = await postJson<unknown>("/train/archive", normalizeBody(input));
     return asText(JSON.stringify(json, null, 2));
   }
 );
@@ -113,18 +147,6 @@ server.registerTool(
 );
 
 server.registerTool(
-  "resume-flag",
-  {
-    description: "Update resume-on-start flag for a training run via mentor-api",
-    inputSchema: resumeFlagSchema,
-  },
-  async (input) => {
-    const json = await postJson<unknown>("/train/resume-flag", normalizeBody(input));
-    return asText(JSON.stringify(json, null, 2));
-  }
-);
-
-server.registerTool(
   "tensorboard-start",
   {
     description: "Start TensorBoard via mentor-api (uses defaults if no arguments are provided)",
@@ -139,6 +161,19 @@ server.registerTool(
       port: input.port,
     });
     const json = await getJson<unknown>(`/tensorboard/start${query}`);
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "tensorboard-status",
+  {
+    description: "Check TensorBoard status via mentor-api",
+    inputSchema: tensorboardStatusSchema,
+  },
+  async (input) => {
+    const query = buildQuery({ resultsDir: input.resultsDir });
+    const json = await getJson<unknown>(`/tensorboard/status${query}`);
     return asText(JSON.stringify(json, null, 2));
   }
 );

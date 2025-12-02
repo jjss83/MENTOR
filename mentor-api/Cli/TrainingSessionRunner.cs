@@ -283,14 +283,7 @@ internal sealed class TrainingSessionRunner
         }
 
         arguments.Add($"--results-dir={_options.ResultsDirectory}");
-        if (_options.Resume)
-        {
-            arguments.Add("--resume");
-        }
-        else
-        {
-            arguments.Add("--force");
-        }
+        arguments.Add("--force");
 
         arguments.Add($"--base-port={_basePort}");
         arguments.Add("--torch-device");
@@ -299,6 +292,11 @@ internal sealed class TrainingSessionRunner
         if (_options.NoGraphics)
         {
             arguments.Add("--no-graphics");
+        }
+
+        if (_options.Resume)
+        {
+            arguments.Add("--resume");
         }
     }
 

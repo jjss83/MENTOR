@@ -443,25 +443,6 @@
     .detail-value.positive { color: var(--success); }
     .detail-value.warning { color: var(--warning); }
     .detail-value.negative { color: var(--error); }
-    .resume-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--stroke);
-      border-radius: 12px;
-      padding: 10px 12px;
-    }
-    .resume-note { color: var(--muted); font-size: 12px; }
-    .resume-inline {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 8px;
-      border: 1px solid var(--stroke);
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.04);
-    }
     .log-actions button {
       padding: 8px 12px;
       border-radius: 10px;
@@ -640,6 +621,9 @@
         tensorboardUrl: null,
         forceTensorboardReload: false,
         tensorboardCollapsed: false,
+        tensorboardRunning: false,
+        tensorboardManual: false,
+        tensorboardStatusRunning: false,
       };
 
       const defaultTensorboardUrl = 'http://localhost:6006/';
@@ -902,8 +886,15 @@
         header.className = 'card-header';
         const runId = pick(run, 'runId') || 'Unknown run';
         const runParams = pick(run, 'parameters') || {};
-        const resumeFlag = pick(run, 'resumeOnStart') ?? pick(runParams, 'resumeOnStart');
         const isCompleted = !!pick(run, 'completed');
+        const statusText = pick(run, 'status');
+        const normalizedStatus = (statusText || '').toLowerCase();
+        const processId = pick(run, 'processId');
+        const processAlive = !!pick(run, 'processAlive');
+        const canResumeFlag = pick(run, 'canResume');
+        const canResume = typeof canResumeFlag === 'boolean'
+          ? canResumeFlag
+          : (!processAlive && !isCompleted && normalizedStatus !== 'running');
         const logPath = deriveLogPath(run);
         const logUrl = toFileUrl(logPath) ?? logPath;
         const selection = document.createElement('input');
@@ -922,7 +913,6 @@
         toggleLabel.className = 'pill-label';
         toggleLabel.textContent = 'Details';
         const chip = document.createElement('div');
-        const statusText = pick(run, 'status');
         const sClass = statusClass(statusText);
         chip.className = `status-chip ${sClass}`;
         const dot = document.createElement('span');
@@ -935,48 +925,14 @@
         selectionWrap.style.alignItems = 'center';
         selectionWrap.style.gap = '6px';
         selectionWrap.append(selection, toggleLabel);
+        const resumeBtn = createResumeButton(run, canResume);
         const archiveBtn = createArchiveButton(runId);
-        const resumeControl = document.createElement('div');
-        resumeControl.className = 'resume-inline';
-        const resumeToggle = document.createElement('input');
-        resumeToggle.type = 'checkbox';
-        resumeToggle.checked = isCompleted ? false : !!resumeFlag;
-        resumeToggle.disabled = isCompleted;
-        resumeToggle.addEventListener('click', (event) => event.stopPropagation());
-        const resumeLabel = document.createElement('div');
-        resumeLabel.className = 'pill-label';
-        resumeLabel.textContent = 'Resume';
-        const resumeNote = document.createElement('div');
-        resumeNote.className = 'resume-note';
-        const setResumeNote = (value) => {
-          if (isCompleted) {
-            resumeNote.textContent = 'Completed';
-          } else {
-            resumeNote.textContent = value ? 'On' : 'Off';
-          }
-        };
-        setResumeNote(resumeToggle.checked);
-        resumeToggle.addEventListener('change', async (event) => {
-          if (isCompleted) return;
-          const desired = event.target.checked;
-          resumeToggle.disabled = true;
-          resumeNote.textContent = 'Saving...';
-          try {
-            await postJson(`${state.apiBase}/train/resume-flag`, { runId, resumeOnStart: desired, resultsDir: pick(run, 'resultsDirectory') });
-            setResumeNote(desired);
-            await refreshAll();
-          } catch (err) {
-            console.error(err);
-            resumeToggle.checked = !desired;
-            resumeNote.textContent = err?.message || 'Failed to update';
-          } finally {
-            resumeToggle.disabled = isCompleted ? true : false;
-          }
-        });
-        resumeControl.append(resumeToggle, resumeLabel, resumeNote);
         const actions = document.createElement('div');
         actions.className = 'card-actions';
-        actions.append(archiveBtn, resumeControl, chip);
+        if (resumeBtn) {
+          actions.append(resumeBtn);
+        }
+        actions.append(archiveBtn, chip);
         header.append(selectionWrap, id, actions);
 
         const detailLines = [
@@ -988,6 +944,9 @@
           { key: 'TensorBoard', value: pick(run, 'tensorboardUrl') || '-' },
           { key: 'Log path', value: logPath || '-' },
           { key: 'Exit code', value: pick(run, 'exitCode') ?? '-' },
+          { key: 'Process ID', value: processId ?? '-' },
+          { key: 'Process alive', value: formatFlag(processAlive, 'Yes', 'No') },
+          { key: 'Can resume', value: formatFlag(canResume, 'Yes', 'No') },
           { key: 'Env path', value: pick(runParams, 'envPath') || '-' },
           { key: 'Config', value: pick(runParams, 'configPath') || '-' },
           { key: 'Conda env', value: pick(runParams, 'condaEnv') || '-' },
@@ -996,7 +955,7 @@
           { key: 'Env executable', value: formatFlag(pick(runParams, 'hasEnvExecutable'), 'Yes', 'No') },
           { key: 'Skip conda', value: formatFlag(pick(runParams, 'skipConda'), 'Skip', 'Use conda') },
           { key: 'Launch TensorBoard', value: formatFlag(pick(runParams, 'tensorboard'), 'Yes', 'No') },
-          { key: 'Resume on start', value: formatFlag(resumeFlag, 'Yes', 'No') },
+          { key: 'Resume flag', value: formatFlag(pick(runParams, 'resume'), 'Yes', 'No') },
         ];
         const detailArea = document.createElement('div');
         detailArea.className = 'detail-text detail-list';
@@ -1080,6 +1039,34 @@
         return card;
       }
 
+      const terminalStatuses = new Set(['succeeded', 'success', 'completed', 'failed', 'failure', 'canceled', 'cancelled']);
+
+      function createResumeButton(run, canResumeOverride) {
+        const runId = pick(run, 'runId');
+        const status = (pick(run, 'status') || '').toLowerCase();
+        const completed = !!pick(run, 'completed');
+        const processAlive = !!pick(run, 'processAlive');
+        const canResumeFlag = typeof canResumeOverride === 'boolean' ? canResumeOverride : pick(run, 'canResume');
+        const canResume = typeof canResumeFlag === 'boolean'
+          ? canResumeFlag
+          : (!processAlive && !completed && status !== 'running');
+        const effectiveCanResume = canResume && !terminalStatuses.has(status) && !completed;
+        if (!effectiveCanResume) {
+          return null;
+        }
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'secondary';
+        btn.textContent = 'Resume';
+        btn.title = `Resume ${runId}`;
+        btn.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          await resumeRun(runId, btn);
+        });
+        return btn;
+      }
+
       function createArchiveButton(runId) {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -1120,6 +1107,32 @@
         });
       }
 
+      async function resumeRun(runId, button) {
+        if (!runId) return;
+        const originalText = button?.textContent;
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Resuming...';
+        }
+        try {
+          await postJson(`${state.apiBase}/train/resume`, { runId });
+          await refreshAll();
+        } catch (err) {
+          console.error(err);
+          const message = (err?.message || 'Failed to resume run.').trim();
+          el.runsNote.textContent = message;
+          if (button) {
+            button.classList.add('error');
+            setTimeout(() => button.classList.remove('error'), 1400);
+          }
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent = originalText || 'Resume';
+          }
+        }
+      }
+
       async function archiveRun(runId, button) {
         if (!runId) return;
         if (button) {
@@ -1150,11 +1163,18 @@
         const list = Array.isArray(runs) ? runs : [];
         const withTb = list.find(r => pick(r, 'tensorboardUrl'));
         const url = withTb ? pick(withTb, 'tensorboardUrl') : defaultTensorboardUrl;
+        const runningFromRuns = Boolean(withTb);
         const note = withTb ? `From run ${pick(withTb, 'runId') || 'unknown'}` : 'Default (localhost:6006)';
+        state.tensorboardRunning = runningFromRuns || state.tensorboardManual || state.tensorboardStatusRunning;
+        if (runningFromRuns) {
+          state.tensorboardManual = false;
+        }
+
         if (!url) {
           el.tbSection.hidden = true;
           el.tbFrame.removeAttribute('src');
           state.tensorboardUrl = null;
+          updateTensorboardControls();
           return;
         }
         const current = el.tbFrame.getAttribute('src');
@@ -1172,6 +1192,30 @@
         el.tbToggle.textContent = state.tensorboardCollapsed ? 'Expand' : 'Collapse';
         el.tbFrame.closest('.embed-frame').style.display = state.tensorboardCollapsed ? 'none' : 'block';
         document.querySelector('.tb-controls')?.classList.toggle('collapsed', state.tensorboardCollapsed);
+        updateTensorboardControls();
+      }
+
+      function updateTensorboardControls() {
+        if (el.tbStart) {
+          el.tbStart.hidden = state.tensorboardRunning;
+        }
+      }
+
+      async function updateTensorboardStatus() {
+        try {
+          const data = await fetchJson(`${state.apiBase}/tensorboard/status`);
+          const running = Boolean(pick(data, 'running'));
+          state.tensorboardStatusRunning = running;
+          if (running && pick(data, 'runId')) {
+            state.tensorboardManual = false;
+          }
+          if (!running) {
+            state.tensorboardManual = false;
+          }
+          updateTensorboardControls();
+        } catch (err) {
+          console.error(err);
+        }
       }
 
       async function startTensorboard() {
@@ -1192,6 +1236,9 @@
             el.tbSection.hidden = false;
           }
           el.tbNote.textContent = message;
+          state.tensorboardManual = true;
+          state.tensorboardRunning = true;
+          updateTensorboardControls();
           await refreshAll();
         } catch (err) {
           console.error(err);
@@ -1345,7 +1392,8 @@
             console.error(err);
             renderRuns([], 'Unable to load runs.');
           }),
-          updateProcessStatus().catch(() => {})
+          updateProcessStatus().catch(() => {}),
+          updateTensorboardStatus().catch(() => {})
         ]);
         const now = new Date();
         el.updatedLabel.textContent = now.toLocaleTimeString();
@@ -1424,6 +1472,7 @@
         });
         document.querySelectorAll('.card input[type="checkbox"]').forEach(cb => { cb.checked = true; });
       });
+      updateTensorboardControls();
       startLoop();
     })();
   </script>

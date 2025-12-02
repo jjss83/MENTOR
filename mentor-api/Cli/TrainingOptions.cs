@@ -147,6 +147,10 @@ internal sealed record TrainingOptions(
                     builder.LaunchTensorBoard = true;
                     break;
 
+                case "resume":
+                    builder.Resume = true;
+                    break;
+
                 default:
                     error = $"Unknown option '--{key}'.";
                     return false;
@@ -178,7 +182,7 @@ internal sealed record TrainingOptions(
             builder.NoGraphics,
             builder.SkipConda,
             builder.LaunchTensorBoard,
-            Resume: false);
+            builder.Resume);
 
         return true;
     }
@@ -293,6 +297,7 @@ internal sealed record TrainingOptions(
         public bool NoGraphics { get; set; }
         public bool SkipConda { get; set; }
         public bool LaunchTensorBoard { get; set; }
+        public bool Resume { get; set; }
     }
 }
 

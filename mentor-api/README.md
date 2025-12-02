@@ -12,7 +12,7 @@ This minimal ASP.NET Core service exposes HTTP endpoints that wrap the Mentor tr
 cd mentor-api
  dotnet run
 ```
-This launches Kestrel on `http://localhost:5113` with Swagger UI enabled in `Development` mode. When the API starts it attempts to resume any unfinished training runs it finds under the default results directory (`X:/workspace/MENTOR/ml-agents-training-results`).
+This launches Kestrel on `http://localhost:5113` with Swagger UI enabled in `Development` mode.
 
 ### Run with hot reload (dotnet watch)
 Use `dotnet watch` during development to rebuild and restart the API when files change:
@@ -39,7 +39,7 @@ Swagger exposes example payloads for each endpoint when you browse `http://local
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `envPath` | string | Full path to your Unity environment executable (`.exe`). Optional when you'll launch the Unity Editor yourself or when resuming with a stored path. |
+| `envPath` | string | Full path to your Unity environment executable (`.exe`). Optional when you'll launch the Unity Editor yourself. |
 | `config` | string | Path to the ML-Agents trainer YAML file. Defaults to `config/ppo/3DBall.yaml`. |
 | `runId` | string | Optional custom run identifier; otherwise `rt-YYMMDD-<n>` is generated (UTC date with a daily counter). |
 | `resultsDir` | string | Directory where ML-Agents will write training artifacts. Defaults to `X:/workspace/MENTOR/ml-agents-training-results`. |
