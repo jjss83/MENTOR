@@ -42,6 +42,11 @@ const resumeFlagSchema = z.object({
   resultsDir: z.string().optional(),
 });
 
+const runControlSchema = z.object({
+  runId: z.string(),
+  resultsDir: z.string().optional(),
+});
+
 const tensorboardStartSchema = z.object({
   resultsDir: z.string().optional(),
   runId: z.string().optional(),
@@ -56,6 +61,42 @@ server.registerTool(
   async () => {
     const response = await getJson<Record<string, unknown>>("/health");
     return asText(JSON.stringify(response, null, 2));
+  }
+);
+
+server.registerTool(
+  "dashboard-status",
+  {
+    description: "Check mentor web dashboard exposure status",
+    inputSchema: z.object({}),
+  },
+  async () => {
+    const json = await getJson<unknown>("/dashboard/status");
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "dashboard-start",
+  {
+    description: "Ensure mentor web dashboard is served over http://localhost:4173",
+    inputSchema: z.object({}),
+  },
+  async () => {
+    const json = await getJson<unknown>("/dashboard/start");
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "dashboard-stop",
+  {
+    description: "Stop the mentor web dashboard server",
+    inputSchema: z.object({}),
+  },
+  async () => {
+    const json = await postJson<unknown>("/dashboard/stop", {});
+    return asText(JSON.stringify(json, null, 2));
   }
 );
 
@@ -120,6 +161,30 @@ server.registerTool(
   },
   async (input) => {
     const json = await postJson<unknown>("/train/resume-flag", normalizeBody(input));
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "train-stop",
+  {
+    description: "Gracefully stop a running training session via mentor-api (marks it resumable)",
+    inputSchema: runControlSchema,
+  },
+  async (input) => {
+    const json = await postJson<unknown>("/train/stop", normalizeBody(input));
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "train-resume",
+  {
+    description: "Resume a stopped or unfinished training session via mentor-api",
+    inputSchema: runControlSchema,
+  },
+  async (input) => {
+    const json = await postJson<unknown>("/train/resume", normalizeBody(input));
     return asText(JSON.stringify(json, null, 2));
   }
 );

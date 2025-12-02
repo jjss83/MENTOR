@@ -28,8 +28,11 @@ The watcher restarts on saves; stop it with Ctrl+C.
 | --- | --- | --- |
 | `GET` | `/health` | Basic liveness probe; returns `{ "status": "ok" }` when the API is ready. |
 | `POST` | `/train` | Starts a new ML-Agents training job via the CLI runner. |
+| `POST` | `/train/stop` | Gracefully stops a running training session and marks it resumable. |
+| `POST` | `/train/resume` | Resumes a stopped or unfinished run using stored metadata (runs ML-Agents with `--resume`). |
 | `GET` | `/train-status` | Lists the latest known status for all runs (in-memory or found on disk). |
 | `GET` | `/train-status/{runId}` | Returns the latest known status for the specified `runId`. |
+| `POST` | `/train/resume-flag` | Toggle the resume-on-start flag for a run on disk. |
 | `POST` | `/tensorboard/start` | Starts TensorBoard for the results directory if it is not already running. |
 
 Swagger exposes example payloads for each endpoint when you browse `http://localhost:5113/swagger`.
@@ -48,6 +51,7 @@ Swagger exposes example payloads for each endpoint when you browse `http://local
 | `noGraphics` | bool | Mirrors `--no-graphics`. |
 | `skipConda` | bool | Skip Conda activation if tooling is already on `PATH`. |
 | `tensorboard` | bool | Launch TensorBoard alongside training. |
+| `resume` | bool | Continue training from existing checkpoints for the run (`--resume`). |
 
 ### cURL example
 ```bash
@@ -86,6 +90,11 @@ Three ready-to-use payloads for common scenarios:
   "runId": "run-shhhunt-editor"
 }
 ```
+
+## Stop and Resume a Run
+- POST `/train/stop` with `{ "runId": "<id>" }` to ask the API to stop the active training job, mark it resumable, and set the `resumeOnStart` flag on disk.
+- When you want to continue, POST `/train/resume` with the same `runId` (and optional `resultsDir`). The API restarts ML-Agents with `--resume` using the saved metadata.
+- While the stop is in flight the status will report `stopping`, then `stopped` with `completed: false` until you resume.
 
 ## Query Training Status
 - All runs: `GET /train-status?resultsDir=X:/workspace/MENTOR/ml-agents-training-results`

@@ -250,6 +250,70 @@
       gap: 12px;
       align-items: flex-start;
     }
+    .process-tables {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
+    .table-block {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: var(--shadow);
+    }
+    .table-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .table-wrap {
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .process-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .process-table th,
+    .process-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .process-table thead {
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 12px;
+      letter-spacing: 0.01em;
+      color: var(--muted);
+    }
+    .process-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 12px;
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .badge.success .badge-dot { background: var(--success); }
+    .badge.alert .badge-dot { background: var(--error); }
+    .badge.idle .badge-dot { background: #94a3b8; }
+    .muted { color: var(--muted); }
     .micro-label { color: var(--muted); font-size: 12px; margin-top: 6px; }
     .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .chip {
@@ -368,6 +432,7 @@
     .status-succeeded .status-dot { background: var(--success); }
     .status-failed .status-dot { background: var(--error); }
     .status-canceled .status-dot { background: var(--warning); }
+    .status-stopped .status-dot { background: var(--muted); }
     .status-unknown .status-dot { background: #94a3b8; }
     .status-not-found .status-dot { background: #94a3b8; }
     .meta-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
@@ -511,16 +576,45 @@
           <div class="section-title">Process watch</div>
           <div class="section-note" id="process-note">Waiting for first update...</div>
         </div>
-        <div class="process-row">
-          <div>
-            <div class="pill-label">mlagents-learn.exe</div>
-            <div class="pill-value" id="mlagents-count">0</div>
-            <div class="micro-label" id="mlagents-note">processes running</div>
+        <div class="process-tables">
+          <div class="table-block">
+            <div class="table-head">
+              <div class="table-title">ML-Agents learn</div>
+              <div class="micro-label" id="mlagents-note">Awaiting data...</div>
+            </div>
+            <div class="table-wrap">
+              <table class="process-table">
+                <thead>
+                  <tr>
+                    <th>Executable</th>
+                    <th>Status</th>
+                    <th>Running</th>
+                  </tr>
+                </thead>
+                <tbody id="mlagents-table-body">
+                  <tr><td colspan="3" class="muted">Waiting for process info...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div>
-            <div class="pill-label">Environment executables</div>
-            <div id="env-running" class="chip-row"></div>
-            <div class="micro-label" id="env-note">Discovering env executables from results folders.</div>
+          <div class="table-block">
+            <div class="table-head">
+              <div class="table-title">Environment executables</div>
+              <div class="micro-label" id="env-note">Discovering env executables from results folders.</div>
+            </div>
+            <div class="table-wrap">
+              <table class="process-table">
+                <thead>
+                  <tr>
+                    <th>Executable</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="env-table-body">
+                  <tr><td colspan="2" class="muted">Waiting for process info...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
         <div class="action-row">
@@ -607,9 +701,9 @@
         completedCount: document.getElementById('completed-count'),
         failedCount: document.getElementById('failed-count'),
         processNote: document.getElementById('process-note'),
-        mlagentsCount: document.getElementById('mlagents-count'),
         mlagentsNote: document.getElementById('mlagents-note'),
-        envRunning: document.getElementById('env-running'),
+        mlagentsTableBody: document.getElementById('mlagents-table-body'),
+        envTableBody: document.getElementById('env-table-body'),
         envNote: document.getElementById('env-note'),
         killSelect: document.getElementById('kill-select'),
         killBtn: document.getElementById('kill-btn'),
@@ -774,6 +868,8 @@
       function statusClass(status) {
         const normalized = (status || '').toLowerCase();
         if (normalized === 'running') return 'status-running';
+        if (normalized === 'stopping') return 'status-canceled';
+        if (normalized === 'stopped') return 'status-stopped';
         if (normalized === 'succeeded' || normalized === 'success' || normalized === 'completed') return 'status-succeeded';
         if (normalized === 'failed' || normalized === 'failure') return 'status-failed';
         if (normalized === 'canceled' || normalized === 'cancelled') return 'status-canceled';
@@ -859,8 +955,12 @@
         selectionWrap.style.gap = '6px';
         selectionWrap.append(selection, toggleLabel);
         const archiveBtn = createArchiveButton(runId);
+        const stopBtn = createStopButton(runId, statusText, run);
+        const resumeBtn = createResumeButton(runId, statusText, isCompleted, run);
         const actions = document.createElement('div');
         actions.className = 'card-actions';
+        if (stopBtn) actions.append(stopBtn);
+        if (resumeBtn) actions.append(resumeBtn);
         actions.append(archiveBtn, chip);
         header.append(selectionWrap, id, actions);
 
@@ -979,12 +1079,38 @@
           card.classList.add('selected');
         }
 
-        card.addEventListener('click', () => {
-          const next = state.hiddenRuns.has(runId);
-          selection.checked = next;
-          toggleRunSelection(runId, next);
-        });
         return card;
+      }
+
+      function createStopButton(runId, statusText, run) {
+        const normalized = (statusText || '').toLowerCase();
+        if (normalized !== 'running') return null;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'icon-btn secondary';
+        btn.title = `Stop ${runId} for resume`;
+        btn.textContent = 'Stop';
+        btn.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          await stopRun(runId, btn, pick(run, 'resultsDirectory'));
+        });
+        return btn;
+      }
+
+      function createResumeButton(runId, statusText, isCompleted, run) {
+        const normalized = (statusText || '').toLowerCase();
+        const canResume = !isCompleted && normalized !== 'running' && normalized !== 'stopping';
+        if (!canResume) return null;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'icon-btn';
+        btn.title = `Resume ${runId}`;
+        btn.textContent = 'Resume';
+        btn.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          await resumeRun(runId, btn, pick(run, 'resultsDirectory'));
+        });
+        return btn;
       }
 
       function createArchiveButton(runId) {
@@ -1037,6 +1163,66 @@
             card.classList.toggle('collapsed', !selected);
           }
         });
+      }
+
+      async function stopRun(runId, button, resultsDir) {
+        if (!runId) return;
+        const original = button?.textContent;
+        if (button) {
+          button.disabled = true;
+          button.classList.add('spinning');
+          button.textContent = 'Stopping...';
+        }
+        try {
+          const payload = { runId };
+          if (resultsDir) payload.resultsDir = resultsDir;
+          const data = await postJson(`${state.apiBase}/train/stop`, payload);
+          el.runsNote.textContent = pick(data, 'message') || `Stop requested for ${runId}.`;
+          await refreshAll();
+        } catch (err) {
+          console.error(err);
+          el.runsNote.textContent = err?.message || 'Failed to stop run.';
+          if (button) {
+            button.classList.add('error');
+            setTimeout(() => button.classList.remove('error'), 1400);
+          }
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.classList.remove('spinning');
+            if (original) button.textContent = original;
+          }
+        }
+      }
+
+      async function resumeRun(runId, button, resultsDir) {
+        if (!runId) return;
+        const original = button?.textContent;
+        if (button) {
+          button.disabled = true;
+          button.classList.add('spinning');
+          button.textContent = 'Resuming...';
+        }
+        try {
+          const payload = { runId };
+          if (resultsDir) payload.resultsDir = resultsDir;
+          const data = await postJson(`${state.apiBase}/train/resume`, payload);
+          el.runsNote.textContent = pick(data, 'message') || `Resuming ${runId}...`;
+          await refreshAll();
+        } catch (err) {
+          console.error(err);
+          el.runsNote.textContent = err?.message || 'Failed to resume run.';
+          if (button) {
+            button.classList.add('error');
+            setTimeout(() => button.classList.remove('error'), 1400);
+          }
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.classList.remove('spinning');
+            if (original) button.textContent = original;
+          }
+        }
       }
 
       async function archiveRun(runId, button) {
@@ -1166,20 +1352,25 @@
 
         const count = Number(pick(data, 'mlagentsLearnProcesses') ?? 0);
         const safeCount = Number.isFinite(count) ? count : 0;
-        el.mlagentsCount.textContent = safeCount;
         el.mlagentsNote.textContent = `${safeCount === 1 ? 'process' : 'processes'} running`;
 
-        el.envRunning.innerHTML = '';
         if (processError) {
-          const chip = document.createElement('div');
-          chip.className = 'chip alert';
-          chip.textContent = 'Process info unavailable';
-          el.envRunning.append(chip);
+          el.mlagentsTableBody.innerHTML = `<tr><td colspan="3" class="muted">Process info unavailable.</td></tr>`;
+          el.envTableBody.innerHTML = `<tr><td colspan="2" class="muted">Process info unavailable.</td></tr>`;
           el.envNote.textContent = 'Refresh or verify the API to restore process visibility.';
           state.knownEnvExecutables = [];
           updateKillOptions(state.knownEnvExecutables);
           return;
         }
+
+        el.mlagentsTableBody.innerHTML = '';
+        const mlRow = document.createElement('tr');
+        mlRow.innerHTML = `
+          <td>mlagents-learn.exe</td>
+          <td><span class="badge ${safeCount > 0 ? 'success' : 'idle'}"><span class="badge-dot"></span>${safeCount > 0 ? 'Running' : 'Idle'}</span></td>
+          <td>${safeCount}</td>
+        `;
+        el.mlagentsTableBody.append(mlRow);
 
         const running = (() => {
           const value = pick(data, 'runningEnvExecutables');
@@ -1190,20 +1381,23 @@
           return Array.isArray(value) ? value.filter(Boolean) : [];
         })();
 
+        const merged = Array.from(new Set([...known, ...running])).filter(Boolean);
         state.knownEnvExecutables = known;
         updateKillOptions(state.knownEnvExecutables);
 
-        if (!running.length) {
-          const chip = document.createElement('div');
-          chip.className = 'chip';
-          chip.textContent = 'No env executables running';
-          el.envRunning.append(chip);
+        el.envTableBody.innerHTML = '';
+        if (!merged.length) {
+          el.envTableBody.innerHTML = `<tr><td colspan="2" class="muted">No env executables discovered yet.</td></tr>`;
         } else {
-          running.forEach(name => {
-            const chip = document.createElement('div');
-            chip.className = 'chip';
-            chip.textContent = name;
-            el.envRunning.append(chip);
+          merged.sort((a, b) => a.localeCompare(b));
+          merged.forEach(name => {
+            const isRunning = running.includes(name);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${name}</td>
+              <td><span class="badge ${isRunning ? 'success' : 'idle'}"><span class="badge-dot"></span>${isRunning ? 'Running' : 'Idle'}</span></td>
+            `;
+            el.envTableBody.append(row);
           });
         }
 
