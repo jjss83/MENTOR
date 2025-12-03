@@ -5,6 +5,7 @@ using System.Net.NetworkInformation;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using YamlDotNet.RepresentationModel;
 using MentorTrainingRunner;
 using System.Diagnostics;
 var builder = WebApplication.CreateBuilder(args);
@@ -345,7 +346,321 @@ internal sealed record EnvProcessStatus(string Executable, int Count);
 internal sealed record ProcessStatusPayload(string ResultsDirectory, int MlagentsLearnProcesses, IReadOnlyList<string> KnownEnvExecutables, IReadOnlyList<string> RunningEnvExecutables, IReadOnlyList<EnvProcessStatus> RunningEnvProcesses);
 internal sealed record KillProcessRequest(string Executable, string? ResultsDir);
 internal sealed record KillProcessResult(string RequestedExecutable, int MatchedProcesses, int KilledProcesses, IReadOnlyList<string> TargetProcesses, IReadOnlyList<string> Errors);
-internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl, string? LogPath, IReadOnlyList<string>? LogTail, TrainingRunParameters? Parameters, bool ResumeOnStart, int? ProcessId = null, bool ProcessAlive = false, bool CanResume = false)
+internal sealed record CurriculumStage(string Name, double? Threshold, string? Measure, long? MinLessonLength);
+internal sealed record CurriculumState(string ParameterName, string? BehaviorName, IReadOnlyList<CurriculumStage> Stages, int? CurrentStageIndex = null);
+internal sealed record QuickStatSummary(string Name, string Kind, long? Steps, double? DurationSeconds, double? MeanReward, double? RewardStdDev, double? BestReward, double? LastReward, int? CheckpointCount, double? LastCheckpointTime, CurriculumState? Curriculum);
+internal static class QuickStatReader
+{
+    private sealed record Checkpoint(long? Steps, double? Reward, double? CreationTime);
+
+    public static IReadOnlyList<QuickStatSummary> Build(string runId, string resultsDirectory)
+    {
+        try
+        {
+            var runDirectory = TrainingRunStore.BuildRunDirectory(resultsDirectory, runId);
+            return BuildFromRunDirectory(runDirectory);
+        }
+        catch
+        {
+            return Array.Empty<QuickStatSummary>();
+        }
+    }
+
+    private static IReadOnlyList<QuickStatSummary> BuildFromRunDirectory(string runDirectory)
+    {
+        var statusPath = Path.Combine(runDirectory, "run_logs", "training_status.json");
+        if (!File.Exists(statusPath))
+        {
+            return Array.Empty<QuickStatSummary>();
+        }
+
+        JsonNode? node;
+        try
+        {
+            using var stream = File.OpenRead(statusPath);
+            node = JsonNode.Parse(stream);
+        }
+        catch
+        {
+            return Array.Empty<QuickStatSummary>();
+        }
+
+        if (node is not JsonObject root)
+        {
+            return Array.Empty<QuickStatSummary>();
+        }
+
+        var curricula = CurriculumConfigReader.TryLoad(runDirectory);
+        var stats = new List<QuickStatSummary>();
+
+        foreach (var kvp in root)
+        {
+            if (string.Equals(kvp.Key, "metadata", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (kvp.Value is not JsonObject behaviorNode)
+            {
+                continue;
+            }
+
+            var checkpoints = ParseCheckpoints(behaviorNode);
+            if (checkpoints.Count == 0)
+            {
+                continue;
+            }
+
+            var rewardValues = checkpoints.Where(c => c.Reward.HasValue).Select(c => c.Reward!.Value).ToArray();
+            double? meanReward = rewardValues.Length > 0 ? rewardValues.Average() : null;
+            double? rewardStd = rewardValues.Length > 1 && meanReward.HasValue
+                ? Math.Sqrt(rewardValues.Sum(v => Math.Pow(v - meanReward.Value, 2)) / rewardValues.Length)
+                : null;
+
+            long? maxSteps = checkpoints.Where(c => c.Steps.HasValue).Select(c => c.Steps!.Value).DefaultIfEmpty().Max();
+            var timeValues = checkpoints.Where(c => c.CreationTime.HasValue).Select(c => c.CreationTime!.Value).ToArray();
+            double? durationSeconds = timeValues.Length > 1 ? timeValues.Max() - timeValues.Min() : null;
+
+            var bestReward = rewardValues.Length > 0 ? rewardValues.Max() : (double?)null;
+            var last = checkpoints.OrderBy(c => c.CreationTime ?? 0).ThenBy(c => c.Steps ?? 0).LastOrDefault();
+            var lastReward = last?.Reward;
+            var lastTime = last?.CreationTime;
+
+            var curriculum = TryAttachCurriculum(curricula, kvp.Key, bestReward);
+            var kind = curriculum is null ? "behavior" : "curriculum";
+
+            stats.Add(new QuickStatSummary(
+                kvp.Key,
+                kind,
+                maxSteps,
+                durationSeconds,
+                meanReward,
+                rewardStd,
+                bestReward,
+                lastReward,
+                checkpoints.Count,
+                lastTime,
+                curriculum));
+        }
+
+        return stats;
+    }
+
+    private static CurriculumState? TryAttachCurriculum(IReadOnlyDictionary<string, CurriculumState> curricula, string behaviorName, double? bestReward)
+    {
+        if (curricula.Count == 0)
+        {
+            return null;
+        }
+
+        var match = curricula.FirstOrDefault(c => string.Equals(c.Key, behaviorName, StringComparison.OrdinalIgnoreCase));
+        var state = match.Value;
+        if (state is null)
+        {
+            return null;
+        }
+
+        if (state.Stages.Count == 0 || bestReward is null)
+        {
+            return state;
+        }
+
+        var index = state.Stages
+            .Select((stage, idx) => new { stage, idx })
+            .Where(x => x.stage.Threshold is null || bestReward.Value >= x.stage.Threshold.Value)
+            .Select(x => x.idx)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return state with { CurrentStageIndex = index };
+    }
+
+    private static List<Checkpoint> ParseCheckpoints(JsonObject behaviorNode)
+    {
+        var list = new List<Checkpoint>();
+        if (behaviorNode["checkpoints"] is JsonArray checkpoints)
+        {
+            foreach (var entry in checkpoints.OfType<JsonObject>())
+            {
+                var cp = ToCheckpoint(entry);
+                if (cp is not null)
+                {
+                    list.Add(cp);
+                }
+            }
+        }
+
+        if (behaviorNode["final_checkpoint"] is JsonObject finalCheckpoint)
+        {
+            var cp = ToCheckpoint(finalCheckpoint);
+            if (cp is not null)
+            {
+                list.Add(cp);
+            }
+        }
+
+        return list;
+    }
+
+    private static Checkpoint? ToCheckpoint(JsonObject node)
+    {
+        var steps = TryGetLong(node, "steps");
+        var reward = TryGetDouble(node, "reward");
+        var creation = TryGetDouble(node, "creation_time");
+        if (steps is null && reward is null && creation is null)
+        {
+            return null;
+        }
+
+        return new Checkpoint(steps, reward, creation);
+    }
+
+    private static double? TryGetDouble(JsonObject node, string key)
+    {
+        if (node[key] is JsonValue value && value.TryGetValue<double>(out var dbl))
+        {
+            return dbl;
+        }
+
+        if (node[key] is JsonValue alt && alt.TryGetValue<long>(out var lng))
+        {
+            return Convert.ToDouble(lng, CultureInfo.InvariantCulture);
+        }
+
+        return null;
+    }
+
+    private static long? TryGetLong(JsonObject node, string key)
+    {
+        if (node[key] is JsonValue value && value.TryGetValue<long>(out var number))
+        {
+            return number;
+        }
+
+        if (node[key] is JsonValue alt && alt.TryGetValue<double>(out var dbl))
+        {
+            return Convert.ToInt64(Math.Round(dbl, MidpointRounding.AwayFromZero), CultureInfo.InvariantCulture);
+        }
+
+        return null;
+    }
+}
+internal static class CurriculumConfigReader
+{
+    public static IReadOnlyDictionary<string, CurriculumState> TryLoad(string runDirectory)
+    {
+        var configPath = Path.Combine(runDirectory, "configuration.yaml");
+        if (!File.Exists(configPath))
+        {
+            return new Dictionary<string, CurriculumState>();
+        }
+
+        try
+        {
+            using var reader = new StreamReader(configPath);
+            var yaml = new YamlStream();
+            yaml.Load(reader);
+            if (yaml.Documents.Count == 0)
+            {
+                return new Dictionary<string, CurriculumState>();
+            }
+
+            if (yaml.Documents[0].RootNode is not YamlMappingNode root)
+            {
+                return new Dictionary<string, CurriculumState>();
+            }
+
+            if (!root.Children.TryGetValue(new YamlScalarNode("environment_parameters"), out var envParametersNode))
+            {
+                return new Dictionary<string, CurriculumState>();
+            }
+
+            if (envParametersNode is not YamlMappingNode envParameters)
+            {
+                return new Dictionary<string, CurriculumState>();
+            }
+
+            var result = new Dictionary<string, CurriculumState>(StringComparer.OrdinalIgnoreCase);
+            foreach (var paramEntry in envParameters.Children)
+            {
+                var parameterName = (paramEntry.Key as YamlScalarNode)?.Value ?? "curriculum";
+                if (paramEntry.Value is not YamlMappingNode parameterMap)
+                {
+                    continue;
+                }
+
+                if (!parameterMap.Children.TryGetValue(new YamlScalarNode("curriculum"), out var curriculumNode))
+                {
+                    continue;
+                }
+
+                if (curriculumNode is not YamlSequenceNode curriculumSequence)
+                {
+                    continue;
+                }
+
+                var stages = new List<CurriculumStage>();
+                string? behaviorName = null;
+
+                foreach (var stageNode in curriculumSequence.OfType<YamlMappingNode>())
+                {
+                    var stageName = GetScalar(stageNode, "name") ?? "Stage";
+                    var completionCriteria = stageNode.Children.TryGetValue(new YamlScalarNode("completion_criteria"), out var completionNode)
+                        ? completionNode as YamlMappingNode
+                        : null;
+                    var threshold = completionCriteria is null ? null : TryParseDouble(GetScalar(completionCriteria, "threshold"));
+                    var measure = completionCriteria is null ? null : GetScalar(completionCriteria, "measure");
+                    behaviorName ??= completionCriteria is null ? null : GetScalar(completionCriteria, "behavior");
+                    var minLessonLength = completionCriteria is null ? null : TryParseLong(GetScalar(completionCriteria, "min_lesson_length"));
+
+                    stages.Add(new CurriculumStage(stageName, threshold, measure, minLessonLength));
+                }
+
+                if (stages.Count == 0)
+                {
+                    continue;
+                }
+
+                var state = new CurriculumState(parameterName, behaviorName ?? parameterName, stages, null);
+                result[state.BehaviorName ?? parameterName] = state;
+            }
+
+            return result;
+        }
+        catch
+        {
+            return new Dictionary<string, CurriculumState>();
+        }
+    }
+
+    private static string? GetScalar(YamlMappingNode map, string key)
+    {
+        return map.Children.TryGetValue(new YamlScalarNode(key), out var valueNode)
+            ? (valueNode as YamlScalarNode)?.Value
+            : null;
+    }
+
+    private static double? TryParseDouble(string? text)
+    {
+        if (double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
+        {
+            return value;
+        }
+
+        return null;
+    }
+
+    private static long? TryParseLong(string? text)
+    {
+        if (long.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
+        {
+            return value;
+        }
+
+        return null;
+    }
+}
+internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl, string? LogPath, IReadOnlyList<string>? LogTail, TrainingRunParameters? Parameters, bool ResumeOnStart, int? ProcessId = null, bool ProcessAlive = false, bool CanResume = false, IReadOnlyList<QuickStatSummary>? QuickStats = null)
 {
     public static TrainingStatusPayload FromFiles(string runId, string resultsDirectory)
     {
@@ -359,15 +674,16 @@ internal sealed record TrainingStatusPayload(string RunId, string Status, bool C
         var processId = metadata?.ProcessId;
         var processAlive = TrainingRunStore.IsKnownTrainingProcessAlive(processId);
         var stopRequested = metadata?.StopRequested ?? false;
+        var quickStats = QuickStatReader.Build(runId, resultsDirectory);
         if (stopRequested && !File.Exists(trainingStatusPath))
         {
-            return new TrainingStatusPayload(runId, Status: "stopped", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, "Training was stopped for later resume.", TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: true);
+            return new TrainingStatusPayload(runId, Status: "stopped", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, "Training was stopped for later resume.", TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: true, QuickStats: quickStats);
         }
         if (File.Exists(trainingStatusPath))
         {
             var statusText = TryReadStatus(trainingStatusPath);
             var normalized = NormalizeStatus(statusText);
-            return new TrainingStatusPayload(runId, normalized, Completed: true, ExitCode: null, resultsDirectory, trainingStatusPath, null, TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: false);
+            return new TrainingStatusPayload(runId, normalized, Completed: true, ExitCode: null, resultsDirectory, trainingStatusPath, null, TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: false, QuickStats: quickStats);
         }
         if (Directory.Exists(runDirectory))
         {
@@ -375,9 +691,9 @@ internal sealed record TrainingStatusPayload(string RunId, string Status, bool C
             var message = processAlive
                 ? $"Training process detected with PID {processId}."
                 : "Run directory exists but training_status.json has not been written yet.";
-            return new TrainingStatusPayload(runId, status, Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, message, TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: !processAlive);
+            return new TrainingStatusPayload(runId, status, Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, message, TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: !processAlive, QuickStats: quickStats);
         }
-        return new TrainingStatusPayload(runId, Status: "not-found", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, $"No run data found at '{runDirectory}'.", TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: false);
+        return new TrainingStatusPayload(runId, Status: "not-found", Completed: false, ExitCode: null, resultsDirectory, trainingStatusPath, $"No run data found at '{runDirectory}'.", TensorboardUrl: null, LogPath: logPath, LogTail: logTail, Parameters: parameters, ResumeOnStart: resumeOnStart, ProcessId: processId, ProcessAlive: processAlive, CanResume: false, QuickStats: quickStats);
     }
     private static string NormalizeStatus(string? status)
     {
@@ -1806,7 +2122,8 @@ internal sealed class TrainingRunState
         var processId = metadata?.ProcessId;
         var processAlive = TrainingRunStore.IsKnownTrainingProcessAlive(processId);
         var canResume = !processAlive && !completed && !string.Equals(status, "running", StringComparison.OrdinalIgnoreCase);
-        return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message, TensorboardUrl, LogPath, logTail, parameters, resumeOnStart, processId, processAlive, canResume);
+        var quickStats = QuickStatReader.Build(RunId, ResultsDirectory);
+        return new TrainingStatusPayload(RunId, status, completed, exitCode, ResultsDirectory, trainingStatusPath, message, TensorboardUrl, LogPath, logTail, parameters, resumeOnStart, processId, processAlive, canResume, quickStats);
     }
 }
 internal sealed record TrainingRunMetadata(string? EnvPath, string ConfigPath, string RunId, string ResultsDirectory, string CondaEnvironmentName, int? BasePort, bool NoGraphics, bool SkipConda, bool LaunchTensorboard, bool ResumeOnStart = false, int? ProcessId = null, bool StopRequested = false, bool Resume = false)

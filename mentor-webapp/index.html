@@ -530,6 +530,69 @@
       border-radius: var(--card-radius);
       background: rgba(255, 255, 255, 0.02);
     }
+    .quick-stats {
+      display: grid;
+      gap: 10px;
+      margin: 6px 0 12px;
+    }
+    .quick-stats-title {
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .quick-stat-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow);
+    }
+    .quick-stat-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .quick-stat-name { font-weight: 700; font-size: 15px; color: #f8fafc; }
+    .quick-stat-kind { color: var(--muted); font-size: 12px; }
+    .quick-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+    }
+    .quick-metric {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .quick-metric .label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .quick-metric .value { font-size: 18px; font-weight: 700; }
+    .stage-block { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .stage-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stage-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      font-size: 12px;
+    }
+    .stage-chip.current { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.3); }
+    .stage-badge {
+      background: rgba(125, 211, 252, 0.12);
+      color: var(--accent);
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 11px;
+    }
+    .quick-meta { color: var(--muted); font-size: 12px; }
     @media (max-width: 640px) {
       .page { padding: 22px 18px 32px; }
       h1 { font-size: 28px; }
@@ -773,6 +836,50 @@
       };
 
       const pick = (obj, key) => obj?.[key] ?? obj?.[key.charAt(0).toUpperCase() + key.slice(1)];
+      const numberFormatter = new Intl.NumberFormat('en-US');
+
+      function formatNumber(value) {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return '—';
+        return numberFormatter.format(num);
+      }
+
+      function formatSteps(value) {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return '—';
+        if (Math.abs(num) >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+        if (Math.abs(num) >= 1_000) return `${(num / 1_000).toFixed(1)}k`;
+        return formatNumber(num);
+      }
+
+      function formatReward(value) {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return '—';
+        return num.toFixed(3);
+      }
+
+      function formatDuration(seconds) {
+        const num = Number(seconds);
+        if (!Number.isFinite(num) || num < 0) return '—';
+        const rounded = Math.round(num);
+        const hours = Math.floor(rounded / 3600);
+        const minutes = Math.floor((rounded % 3600) / 60);
+        const secs = rounded % 60;
+        const parts = [];
+        if (hours) parts.push(`${hours}h`);
+        if (minutes) parts.push(`${minutes}m`);
+        if (!hours || secs) {
+          parts.push(`${secs}s`);
+        }
+        return parts.join(' ');
+      }
+
+      function formatTimestamp(seconds) {
+        const num = Number(seconds);
+        if (!Number.isFinite(num)) return '—';
+        const date = new Date(num * 1000);
+        return date.toLocaleString();
+      }
 
       el.apiInput.value = state.apiBase;
       const initialSeconds = state.refreshMs / 1000;
@@ -1193,7 +1300,11 @@
 
         const detailsWrap = document.createElement('div');
         detailsWrap.className = 'card-details';
+        const quickStats = buildQuickStats(run);
         const attributeArea = buildAttributeArea(run, runParams, logPath);
+        if (quickStats) {
+          detailsWrap.append(quickStats);
+        }
         detailsWrap.append(attributeArea, log, logActions);
 
         detailsWrap.hidden = !detailsVisible;
@@ -1276,6 +1387,139 @@
           return value.trim().length > 0;
         }
         return true;
+      }
+
+      function buildQuickStats(run) {
+        const stats = pick(run, 'quickStats');
+        if (!Array.isArray(stats) || !stats.length) return null;
+        const wrap = document.createElement('div');
+        wrap.className = 'quick-stats';
+        const title = document.createElement('div');
+        title.className = 'quick-stats-title';
+        title.textContent = 'Quick stats';
+        wrap.append(title);
+        stats.forEach(stat => {
+          const card = buildQuickStatCard(stat);
+          if (card) wrap.append(card);
+        });
+        return wrap.childElementCount > 1 ? wrap : null;
+      }
+
+      function buildQuickStatCard(stat) {
+        if (!stat) return null;
+        const card = document.createElement('div');
+        card.className = 'quick-stat-card';
+        const head = document.createElement('div');
+        head.className = 'quick-stat-head';
+        const name = document.createElement('div');
+        name.className = 'quick-stat-name';
+        name.textContent = pick(stat, 'name') || 'Behavior';
+        const kindLabel = document.createElement('div');
+        kindLabel.className = 'quick-stat-kind';
+        const kind = (pick(stat, 'kind') || 'behavior').toString().toLowerCase();
+        kindLabel.textContent = `${kind === 'curriculum' ? 'Curriculum' : 'Behavior'} summary`;
+        head.append(name, kindLabel);
+        card.append(head);
+
+        const metrics = [
+          { label: 'Steps', raw: pick(stat, 'steps'), formatter: formatSteps },
+          { label: 'Elapsed', raw: pick(stat, 'durationSeconds'), formatter: formatDuration },
+          { label: 'Mean reward', raw: pick(stat, 'meanReward'), formatter: formatReward },
+          { label: 'Std reward', raw: pick(stat, 'rewardStdDev'), formatter: formatReward },
+          { label: 'Best reward', raw: pick(stat, 'bestReward'), formatter: formatReward },
+          { label: 'Checkpoints', raw: pick(stat, 'checkpointCount'), formatter: formatNumber },
+        ];
+        const lastCheckpointTime = pick(stat, 'lastCheckpointTime');
+        if (lastCheckpointTime !== undefined && lastCheckpointTime !== null) {
+          metrics.push({ label: 'Last checkpoint', raw: lastCheckpointTime, formatter: formatTimestamp });
+        }
+        const metricGrid = document.createElement('div');
+        metricGrid.className = 'quick-stat-grid';
+        metrics.forEach(metric => {
+          const value = metric.formatter ? metric.formatter(metric.raw) : metric.raw;
+          if (value === null || value === undefined || value === '—') return;
+          const div = document.createElement('div');
+          div.className = 'quick-metric';
+          div.innerHTML = `<div class="label">${metric.label}</div><div class="value">${value}</div>`;
+          metricGrid.append(div);
+        });
+        if (metricGrid.childElementCount) {
+          card.append(metricGrid);
+        }
+
+        const curriculum = pick(stat, 'curriculum');
+        if (curriculum && Array.isArray(pick(curriculum, 'stages')) && pick(curriculum, 'stages').length) {
+          card.append(buildCurriculumBlock(curriculum));
+        } else if (kind === 'curriculum') {
+          const note = document.createElement('div');
+          note.className = 'quick-meta';
+          note.textContent = 'Curriculum stages not detected yet.';
+          card.append(note);
+        }
+
+        return card;
+      }
+
+      function buildCurriculumBlock(curriculum) {
+        const block = document.createElement('div');
+        block.className = 'stage-block';
+        const heading = document.createElement('div');
+        heading.className = 'quick-meta';
+        const label = pick(curriculum, 'parameterName') || pick(curriculum, 'behaviorName') || 'Curriculum';
+        heading.textContent = `Curriculum ${label}`;
+        block.append(heading);
+
+        const list = document.createElement('div');
+        list.className = 'stage-list';
+        const stages = Array.isArray(pick(curriculum, 'stages')) ? pick(curriculum, 'stages') : [];
+        const currentStage = Number(pick(curriculum, 'currentStageIndex'));
+        const hasCurrentStage = Number.isFinite(currentStage);
+        stages.forEach((stage, idx) => {
+          const chip = document.createElement('div');
+          chip.className = 'stage-chip';
+          if (hasCurrentStage && currentStage === idx) {
+            chip.classList.add('current');
+          }
+          const badge = document.createElement('span');
+          badge.className = 'stage-badge';
+          badge.textContent = `Stage ${idx + 1}`;
+          const name = document.createElement('span');
+          name.textContent = pick(stage, 'name') || 'Stage';
+          chip.append(badge, name);
+          const details = [];
+          const threshold = pick(stage, 'threshold');
+          const minLesson = pick(stage, 'minLessonLength');
+          if (threshold !== null && threshold !== undefined) {
+            details.push(`threshold ${formatReward(threshold)}`);
+          }
+          if (Number.isFinite(Number(minLesson))) {
+            details.push(`${formatSteps(minLesson)} min steps`);
+          }
+          if (details.length) {
+            const meta = document.createElement('span');
+            meta.className = 'quick-meta';
+            meta.textContent = details.join(' · ');
+            chip.append(meta);
+          }
+          list.append(chip);
+        });
+
+        if (list.childElementCount) {
+          block.append(list);
+          if (!hasCurrentStage) {
+            const note = document.createElement('div');
+            note.className = 'quick-meta';
+            note.textContent = 'Stage not detected; showing all defined stages.';
+            block.append(note);
+          }
+        } else {
+          const empty = document.createElement('div');
+          empty.className = 'quick-meta';
+          empty.textContent = 'No curriculum stages found in config.';
+          block.append(empty);
+        }
+
+        return block;
       }
 
       function buildAttributeArea(run, runParams, logPath) {
