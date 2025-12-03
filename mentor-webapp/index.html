@@ -530,6 +530,12 @@
       border-radius: var(--card-radius);
       background: rgba(255, 255, 255, 0.02);
     }
+    .run-id-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .quick-stats {
       display: grid;
       gap: 10px;
@@ -881,6 +887,40 @@
         return date.toLocaleString();
       }
 
+      async function copyText(text, button) {
+        const original = button?.textContent;
+        const originalDisabled = button?.disabled;
+        try {
+          if (button) {
+            button.disabled = true;
+            button.textContent = 'Copying...';
+          }
+          if (navigator?.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.append(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            textarea.remove();
+          }
+          if (button) {
+            button.textContent = 'Copied!';
+            setTimeout(() => { button.textContent = original || 'Copy ID'; }, 1200);
+          }
+        } catch {
+          if (button) {
+            button.textContent = 'Failed';
+            setTimeout(() => { button.textContent = original || 'Copy ID'; }, 1200);
+          }
+        } finally {
+          if (button) {
+            button.disabled = !!originalDisabled;
+          }
+        }
+      }
+
       el.apiInput.value = state.apiBase;
       const initialSeconds = state.refreshMs / 1000;
       el.refreshLabel.textContent = `Every ${initialSeconds}s`;
@@ -1206,6 +1246,11 @@
         const id = document.createElement('div');
         id.className = 'run-id';
         id.textContent = runId;
+        const copyBtn = createCopyIdButton(runId);
+        const idWrap = document.createElement('div');
+        idWrap.className = 'run-id-wrap';
+        idWrap.append(id);
+        if (copyBtn) idWrap.append(copyBtn);
         const toggleLabel = document.createElement('div');
         toggleLabel.className = 'pill-label';
         toggleLabel.textContent = 'Details';
@@ -1272,7 +1317,7 @@
         if (stopBtn) actions.append(stopBtn);
         if (resumeBtn) actions.append(resumeBtn);
         actions.append(resumeInline, archiveBtn, deleteBtn, chip);
-        header.append(selectionWrap, id, actions);
+        header.append(selectionWrap, idWrap, actions);
 
         const log = document.createElement('div');
         log.className = 'log';
@@ -1371,6 +1416,20 @@
         btn.addEventListener('click', async (event) => {
           event.stopPropagation();
           await deleteRun(runId, btn, pick(run, 'resultsDirectory'));
+        });
+        return btn;
+      }
+
+      function createCopyIdButton(runId) {
+        if (!runId) return null;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'icon-btn secondary';
+        btn.title = `Copy ${runId}`;
+        btn.textContent = 'Copy ID';
+        btn.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          await copyText(runId, btn);
         });
         return btn;
       }
