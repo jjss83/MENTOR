@@ -608,10 +608,11 @@
                   <tr>
                     <th>Executable</th>
                     <th>Status</th>
+                    <th>Count</th>
                   </tr>
                 </thead>
                 <tbody id="env-table-body">
-                  <tr><td colspan="2" class="muted">Waiting for process info...</td></tr>
+                  <tr><td colspan="3" class="muted">Waiting for process info...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1356,7 +1357,7 @@
 
         if (processError) {
           el.mlagentsTableBody.innerHTML = `<tr><td colspan="3" class="muted">Process info unavailable.</td></tr>`;
-          el.envTableBody.innerHTML = `<tr><td colspan="2" class="muted">Process info unavailable.</td></tr>`;
+          el.envTableBody.innerHTML = `<tr><td colspan="3" class="muted">Process info unavailable.</td></tr>`;
           el.envNote.textContent = 'Refresh or verify the API to restore process visibility.';
           state.knownEnvExecutables = [];
           updateKillOptions(state.knownEnvExecutables);
@@ -1376,36 +1377,57 @@
           const value = pick(data, 'runningEnvExecutables');
           return Array.isArray(value) ? value.filter(Boolean) : [];
         })();
+        const runningCounts = (() => {
+          const value = pick(data, 'runningEnvProcessCounts');
+          if (value && typeof value === 'object' && !Array.isArray(value)) {
+            return Object.entries(value).reduce((acc, [key, val]) => {
+              const num = Number(val);
+              acc[key] = Number.isFinite(num) ? num : 0;
+              return acc;
+            }, {});
+          }
+          return {};
+        })();
+        const envProcessCount = (() => {
+          const value = Number(pick(data, 'runningEnvProcessCount'));
+          if (Number.isFinite(value)) return value;
+          const fromCounts = Object.values(runningCounts).reduce((sum, val) => sum + (Number.isFinite(val) ? Number(val) : 0), 0);
+          if (fromCounts > 0) return fromCounts;
+          return running.length;
+        })();
         const known = (() => {
           const value = pick(data, 'knownEnvExecutables');
           return Array.isArray(value) ? value.filter(Boolean) : [];
         })();
 
-        const merged = Array.from(new Set([...known, ...running])).filter(Boolean);
+        const merged = Array.from(new Set([...known, ...running, ...Object.keys(runningCounts)])).filter(Boolean);
         state.knownEnvExecutables = known;
         updateKillOptions(state.knownEnvExecutables);
 
         el.envTableBody.innerHTML = '';
         if (!merged.length) {
-          el.envTableBody.innerHTML = `<tr><td colspan="2" class="muted">No env executables discovered yet.</td></tr>`;
+          el.envTableBody.innerHTML = `<tr><td colspan="3" class="muted">No env executables discovered yet.</td></tr>`;
         } else {
           merged.sort((a, b) => a.localeCompare(b));
           merged.forEach(name => {
-            const isRunning = running.includes(name);
+            const count = Number(runningCounts[name] ?? 0);
+            const normalizedCount = Number.isFinite(count) ? count : 0;
+            const derivedCount = normalizedCount > 0 ? normalizedCount : (running.includes(name) ? 1 : 0);
+            const isRunning = derivedCount > 0;
             const row = document.createElement('tr');
             row.innerHTML = `
               <td>${name}</td>
-              <td><span class="badge ${isRunning ? 'success' : 'idle'}"><span class="badge-dot"></span>${isRunning ? 'Running' : 'Idle'}</span></td>
+              <td><span class="badge ${isRunning ? 'success' : 'idle'}"><span class="badge-dot"></span>${isRunning ? 'Running' : 'Idle'}${isRunning ? ` (${derivedCount})` : ''}</span></td>
+              <td>${derivedCount}</td>
             `;
             el.envTableBody.append(row);
           });
         }
 
-        if (known.length) {
-          el.envNote.textContent = `Tracking ${known.length} env exe${known.length === 1 ? '' : 's'} from results folders.`;
-        } else {
-          el.envNote.textContent = 'No env executables discovered in results folders yet.';
-        }
+        const runningLabel = `${envProcessCount} env process${envProcessCount === 1 ? '' : 'es'} running`;
+        el.envNote.textContent = known.length
+          ? `${runningLabel}. Tracking ${known.length} env exe${known.length === 1 ? '' : 's'} from results folders.`
+          : `${runningLabel}. No env executables discovered in results folders yet.`;
       }
 
       async function updateProcessStatus() {
@@ -1527,5 +1549,3 @@
   </script>
 </body>
 </html>
-
-

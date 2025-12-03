@@ -297,7 +297,7 @@ internal sealed record DashboardStatusPayload(bool Running, string Url, string? 
 internal sealed record DashboardStartResult(bool Started, bool AlreadyRunning, string? Url, string? Message, int? ProcessId);
 internal sealed record DashboardStopResult(bool Stopped, bool AlreadyStopped, string? Message);
 internal sealed record ArchiveRunResult(bool Success, string? Message, string? ArchivedTo);
-internal sealed record ProcessStatusPayload(string ResultsDirectory, int MlagentsLearnProcesses, IReadOnlyList<string> KnownEnvExecutables, IReadOnlyList<string> RunningEnvExecutables);
+internal sealed record ProcessStatusPayload(string ResultsDirectory, int MlagentsLearnProcesses, IReadOnlyList<string> KnownEnvExecutables, IReadOnlyList<string> RunningEnvExecutables, int RunningEnvProcessCount, IReadOnlyDictionary<string, int> RunningEnvProcessCounts);
 internal sealed record KillProcessRequest(string Executable, string? ResultsDir);
 internal sealed record KillProcessResult(string RequestedExecutable, int MatchedProcesses, int KilledProcesses, IReadOnlyList<string> TargetProcesses, IReadOnlyList<string> Errors);
 internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl, string? LogPath, IReadOnlyList<string>? LogTail, TrainingRunParameters? Parameters, bool ResumeOnStart, int? ProcessId = null, bool ProcessAlive = false, bool CanResume = false)
@@ -1656,8 +1656,14 @@ internal static class ProcessStatusReader
     {
         var resultsDirectory = TrainingRunStore.ResolveResultsDirectory(resultsDirOverride);
         var knownEnvExecutables = DiscoverEnvExecutables(resultsDirectory);
-        var (mlagentsCount, runningEnvs) = InspectProcesses(knownEnvExecutables);
-        return new ProcessStatusPayload(resultsDirectory, mlagentsCount, knownEnvExecutables, runningEnvs);
+        var inspection = InspectProcesses(knownEnvExecutables);
+        return new ProcessStatusPayload(
+            resultsDirectory,
+            inspection.MlagentsCount,
+            knownEnvExecutables,
+            inspection.RunningEnvExecutables,
+            inspection.RunningEnvProcessCount,
+            inspection.RunningEnvProcessCounts);
     }
 
     public static KillProcessResult Kill(KillProcessRequest request)
@@ -1761,16 +1767,35 @@ internal static class ProcessStatusReader
         return names.ToArray();
     }
 
-    private static (int mlagentsCount, IReadOnlyList<string> runningEnvExecutables) InspectProcesses(IReadOnlyCollection<string> envExeNames)
+    private sealed record ProcessInspectionResult(int MlagentsCount, IReadOnlyList<string> RunningEnvExecutables, IReadOnlyDictionary<string, int> RunningEnvProcessCounts, int RunningEnvProcessCount);
+
+    private static ProcessInspectionResult InspectProcesses(IReadOnlyCollection<string> envExeNames)
     {
         var mlagentsCount = 0;
-        var runningEnvNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var runningEnvCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         var envFileNames = new HashSet<string>(envExeNames, StringComparer.OrdinalIgnoreCase);
         var envBaseNames = envExeNames
             .Select(name => new { Base = Path.GetFileNameWithoutExtension(name), Full = name })
             .Where(x => !string.IsNullOrWhiteSpace(x.Base) && !string.IsNullOrWhiteSpace(x.Full))
             .ToDictionary(x => x.Base!, x => x.Full!, StringComparer.OrdinalIgnoreCase);
+
+        void TrackEnvProcess(string? canonicalName)
+        {
+            if (string.IsNullOrWhiteSpace(canonicalName))
+            {
+                return;
+            }
+
+            if (runningEnvCounts.TryGetValue(canonicalName, out var existing))
+            {
+                runningEnvCounts[canonicalName] = existing + 1;
+            }
+            else
+            {
+                runningEnvCounts[canonicalName] = 1;
+            }
+        }
 
         foreach (var process in Process.GetProcesses())
         {
@@ -1789,7 +1814,7 @@ internal static class ProcessStatusReader
 
                 if (!string.IsNullOrWhiteSpace(processName) && envBaseNames.TryGetValue(processName, out var canonical))
                 {
-                    runningEnvNames.Add(canonical);
+                    TrackEnvProcess(canonical);
                     continue;
                 }
 
@@ -1807,14 +1832,14 @@ internal static class ProcessStatusReader
 
                 if (envFileNames.Contains(fileName))
                 {
-                    runningEnvNames.Add(fileName);
+                    TrackEnvProcess(fileName);
                     continue;
                 }
 
                 var baseName = Path.GetFileNameWithoutExtension(fileName);
                 if (!string.IsNullOrWhiteSpace(baseName) && envBaseNames.TryGetValue(baseName, out var mapped))
                 {
-                    runningEnvNames.Add(mapped);
+                    TrackEnvProcess(mapped);
                 }
             }
             catch
@@ -1834,7 +1859,9 @@ internal static class ProcessStatusReader
             }
         }
 
-        return (mlagentsCount, runningEnvNames.ToArray());
+        var runningEnvExecutables = runningEnvCounts.Keys.ToArray();
+        var runningEnvProcessCount = runningEnvCounts.Values.Sum();
+        return new ProcessInspectionResult(mlagentsCount, runningEnvExecutables, runningEnvCounts, runningEnvProcessCount);
     }
 
     private static HashSet<string> BuildAllowedTargets(IEnumerable<string> knownEnvExecutables)
