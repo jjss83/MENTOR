@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace MentorTrainingRunner;
 
@@ -169,7 +170,7 @@ internal sealed record TrainingOptions(
             return false;
         }
 
-        builder.RunId ??= BuildDefaultRunId(builder.ResultsDirectory);
+        builder.RunId ??= BuildDefaultRunId(builder.ResultsDirectory, builder.TrainerConfigPath);
         builder.CondaEnvironmentName ??= DefaultCondaEnvironmentName;
 
         options = new TrainingOptions(
@@ -234,10 +235,11 @@ internal sealed record TrainingOptions(
         }
     }
 
-    private static string BuildDefaultRunId(string? resultsDirectory)
+    private static string BuildDefaultRunId(string? resultsDirectory, string trainerConfigPath)
     {
+        var prefix = $"{BuildConfigPrefix(trainerConfigPath)}-";
         var datePart = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
-        var prefix = $"rt-{datePart}-";
+        prefix += $"{datePart}-";
         var nextSequence = 1;
 
         if (!string.IsNullOrWhiteSpace(resultsDirectory) && Directory.Exists(resultsDirectory))
@@ -261,6 +263,38 @@ internal sealed record TrainingOptions(
         }
 
         return $"{prefix}{nextSequence}";
+    }
+
+    private static string BuildConfigPrefix(string trainerConfigPath)
+    {
+        var name = Path.GetFileNameWithoutExtension(trainerConfigPath)?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "run";
+        }
+
+        var acronym = new StringBuilder();
+        for (var i = 0; i < name.Length; i++)
+        {
+            var current = name[i];
+            var previous = i > 0 ? name[i - 1] : default;
+            var isBoundary = i == 0
+                || !char.IsLetterOrDigit(previous)
+                || (char.IsUpper(current) && (!char.IsUpper(previous) || (i + 1 < name.Length && char.IsLower(name[i + 1]))))
+                || (char.IsDigit(current) && !char.IsDigit(previous));
+
+            if (isBoundary && char.IsLetterOrDigit(current))
+            {
+                acronym.Append(char.ToLowerInvariant(current));
+            }
+        }
+
+        if (acronym.Length == 0)
+        {
+            acronym.Append(char.ToLowerInvariant(name[0]));
+        }
+
+        return acronym.ToString();
     }
 
     private static int? TryParseSequence(string? name, string prefix)

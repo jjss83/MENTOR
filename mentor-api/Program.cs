@@ -177,6 +177,16 @@ app.MapPost("/train/archive", (ArchiveRunRequest request) =>
 
     return Results.Ok(new { success = true, runId = request.RunId, archivedTo = result.ArchivedTo });
 });
+app.MapPost("/train/delete", (DeleteRunRequest request) =>
+{
+    var result = runStore.DeleteRun(request);
+    if (!result.Success)
+    {
+        return Results.BadRequest(new { error = result.Message ?? $"Unable to delete '{request.RunId}'.", confirmRequired = result.ConfirmRequired });
+    }
+
+    return Results.Ok(new { deleted = true, runId = request.RunId, deletedFrom = result.DeletedFrom, message = result.Message });
+});
 app.MapGet("/tensorboard/start", () =>
 {
     var request = new StartTensorboardRequest(null, null, null, null, null);
@@ -290,6 +300,7 @@ internal sealed record CancelRunRequest(string? ResultsDir, string? RunId = null
 internal sealed record StopRunRequest(string RunId, string? ResultsDir = null);
 internal sealed record ResumeRunRequest(string RunId, string? ResultsDir = null);
 internal sealed record ArchiveRunRequest(string? RunId, string? ResultsDir = null);
+internal sealed record DeleteRunRequest(string RunId, bool? Confirm = null, string? ResultsDir = null);
 internal sealed record ResumeFlagRequest(string RunId, bool ResumeOnStart, string? ResultsDir);
 internal sealed record StartTensorboardRequest(string? ResultsDir, string? RunId = null, string? CondaEnv = null, bool? SkipConda = null, int? Port = null);
 internal sealed record StartTensorboardResult(bool Started, bool AlreadyRunning, string? Url, string? Message);
@@ -297,6 +308,13 @@ internal sealed record DashboardStatusPayload(bool Running, string Url, string? 
 internal sealed record DashboardStartResult(bool Started, bool AlreadyRunning, string? Url, string? Message, int? ProcessId);
 internal sealed record DashboardStopResult(bool Stopped, bool AlreadyStopped, string? Message);
 internal sealed record ArchiveRunResult(bool Success, string? Message, string? ArchivedTo);
+internal sealed record DeleteRunResult(bool Success, string? Message, string? DeletedFrom, bool ConfirmRequired)
+{
+    public static DeleteRunResult RequireConfirmation(string? message) => new(false, message, null, true);
+    public static DeleteRunResult NotFound(string? message) => new(false, message, null, false);
+    public static DeleteRunResult Failed(string? message) => new(false, message, null, false);
+    public static DeleteRunResult Deleted(string deletedFrom, string? message = null) => new(true, message, deletedFrom, false);
+}
 internal sealed record EnvProcessStatus(string Executable, int Count);
 internal sealed record ProcessStatusPayload(string ResultsDirectory, int MlagentsLearnProcesses, IReadOnlyList<string> KnownEnvExecutables, IReadOnlyList<string> RunningEnvExecutables, IReadOnlyList<EnvProcessStatus> RunningEnvProcesses);
 internal sealed record KillProcessRequest(string Executable, string? ResultsDir);
@@ -598,6 +616,7 @@ internal sealed class DashboardHost
 internal sealed class TrainingRunStore
 {
     internal const string ArchiveFolderName = "archive";
+    private const string ArchiveRootSuffix = "-archive";
     private const int DefaultBasePort = 5005;
     private const int BasePortBlockSize = 20;
     private const int BasePortStride = BasePortBlockSize;
@@ -704,7 +723,7 @@ internal sealed class TrainingRunStore
             return new ArchiveRunResult(false, $"Run '{runId}' not found at '{runDirectory}'.", null);
         }
 
-        var archiveRoot = Path.Combine(normalizedResultsDir, ArchiveFolderName);
+        var archiveRoot = GetArchiveRoot(normalizedResultsDir);
         var destination = Path.Combine(archiveRoot, runId);
         if (Directory.Exists(destination))
         {
@@ -738,6 +757,75 @@ internal sealed class TrainingRunStore
         }
 
         return new ArchiveRunResult(true, null, destination);
+    }
+    public DeleteRunResult DeleteRun(DeleteRunRequest request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.RunId))
+        {
+            return DeleteRunResult.Failed("runId is required.");
+        }
+
+        if (!(request.Confirm ?? false))
+        {
+            return DeleteRunResult.RequireConfirmation("Deleting a run is destructive. Resubmit with confirm=true to proceed.");
+        }
+
+        var runId = request.RunId.Trim();
+        TrainingRunState? tracked;
+        lock (_syncRoot)
+        {
+            _runs.TryGetValue(runId, out tracked);
+        }
+
+        var resultsDir = ResolveResultsDirectory(tracked?.ResultsDirectory ?? request.ResultsDir);
+        var normalizedResultsDir = NormalizeDirectoryPath(resultsDir);
+        var runDirectory = BuildRunDirectory(normalizedResultsDir, runId);
+        if (!Directory.Exists(runDirectory))
+        {
+            return DeleteRunResult.NotFound($"Run '{runId}' not found at '{runDirectory}'.");
+        }
+
+        var stopResult = StopTensorboardForRun(runDirectory);
+        if (stopResult.Status == StopTensorboardStatus.Failed)
+        {
+            return DeleteRunResult.Failed(stopResult.Message ?? "Unable to stop TensorBoard for this run.");
+        }
+
+        var warnings = new List<string>();
+        if (tracked is not null && !tracked.IsCompleted)
+        {
+            tracked.Cancel();
+            try
+            {
+                Task.WaitAny(tracked.RunTask, Task.Delay(TimeSpan.FromSeconds(5)));
+            }
+            catch
+            {
+                // ignore wait failures
+            }
+        }
+        else
+        {
+            var metadata = TrainingRunMetadata.TryLoad(runDirectory);
+            TryTerminateKnownTrainingProcess(metadata?.ProcessId, warnings);
+        }
+
+        try
+        {
+            Directory.Delete(runDirectory, recursive: true);
+        }
+        catch (Exception ex)
+        {
+            return DeleteRunResult.Failed($"Unable to delete run '{runId}': {ex.Message}");
+        }
+
+        lock (_syncRoot)
+        {
+            _runs.Remove(runId);
+        }
+
+        var message = warnings.Count > 0 ? string.Join(" | ", warnings) : null;
+        return DeleteRunResult.Deleted(runDirectory, message);
     }
     public ResumeFlagResult SetResumeOnStart(string runId, bool resumeOnStart, string? resultsDirOverride)
     {
@@ -1301,6 +1389,17 @@ internal sealed class TrainingRunStore
             // ignore dispose failures
         }
     }
+    private static string GetArchiveRoot(string normalizedResultsDir)
+    {
+        var trimmed = normalizedResultsDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var parent = Path.GetDirectoryName(trimmed);
+        var name = Path.GetFileName(trimmed);
+        var archiveDirectoryName = string.IsNullOrWhiteSpace(name) ? $"{ArchiveFolderName}{ArchiveRootSuffix}" : $"{name}{ArchiveRootSuffix}";
+
+        return string.IsNullOrWhiteSpace(parent)
+            ? Path.Combine(trimmed, archiveDirectoryName)
+            : Path.Combine(parent, archiveDirectoryName);
+    }
     private static string NormalizeDirectoryPath(string path)
     {
         try
@@ -1315,7 +1414,39 @@ internal sealed class TrainingRunStore
     internal static bool IsArchiveDirectory(string path)
     {
         var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        return string.Equals(name, ArchiveFolderName, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(name, ArchiveFolderName, StringComparison.OrdinalIgnoreCase)
+            || (!string.IsNullOrWhiteSpace(name) && name.EndsWith(ArchiveRootSuffix, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void TryTerminateKnownTrainingProcess(int? pid, List<string> warnings)
+    {
+        if (!pid.HasValue || pid.Value <= 0 || warnings is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(pid.Value);
+            if (process.HasExited)
+            {
+                return;
+            }
+
+            var name = SafeGetProcessName(process);
+            if (!string.IsNullOrWhiteSpace(name) && !AllowedTrainingProcessNames.Contains(name))
+            {
+                warnings.Add($"PID {pid.Value} not terminated because it is '{name}'.");
+                return;
+            }
+
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit(TimeSpan.FromSeconds(5));
+        }
+        catch (Exception ex)
+        {
+            warnings.Add($"PID {pid.GetValueOrDefault()}: {ex.Message}");
+        }
     }
 
     internal static bool IsKnownTrainingProcessAlive(int? pid)

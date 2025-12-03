@@ -183,7 +183,13 @@
       line-height: 0;
       transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, opacity 120ms ease;
     }
+    .icon-btn.danger {
+      color: #f87171;
+      border-color: rgba(248, 113, 113, 0.5);
+      background: rgba(248, 113, 113, 0.08);
+    }
     .icon-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: var(--accent); transform: translateY(-1px); }
+    .icon-btn.danger:hover { background: rgba(248, 113, 113, 0.16); border-color: rgba(248, 113, 113, 0.85); color: #fecdd3; }
     .icon-btn:active { transform: translateY(0); opacity: 0.9; }
     .icon-btn svg { width: 16px; height: 16px; }
     .icon-btn.spinning svg { animation: spin 0.8s linear infinite; }
@@ -1008,6 +1014,7 @@
         selectionWrap.style.gap = '6px';
         selectionWrap.append(selection, toggleLabel);
         const archiveBtn = createArchiveButton(runId);
+        const deleteBtn = createDeleteButton(runId, run);
         const stopBtn = createStopButton(runId, statusText, run);
         const resumeBtn = createResumeButton(runId, statusText, isCompleted, run);
         const resumeInline = document.createElement('div');
@@ -1054,7 +1061,7 @@
         actions.className = 'card-actions';
         if (stopBtn) actions.append(stopBtn);
         if (resumeBtn) actions.append(resumeBtn);
-        actions.append(resumeInline, archiveBtn, chip);
+        actions.append(resumeInline, archiveBtn, deleteBtn, chip);
         header.append(selectionWrap, id, actions);
 
         const log = document.createElement('div');
@@ -1136,6 +1143,19 @@
         btn.addEventListener('click', async (event) => {
           event.stopPropagation();
           await archiveRun(runId, btn);
+        });
+        return btn;
+      }
+
+      function createDeleteButton(runId, run) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'icon-btn danger';
+        btn.title = `Delete ${runId}`;
+        btn.innerHTML = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path fill="currentColor" d="M7.75 3.5h4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75Zm-2 .5a2.25 2.25 0 0 1 2.25-2.25h4a2.25 2.25 0 0 1 2.25 2.25h2.25a.75.75 0 0 1 0 1.5h-.346l-.63 9.607A2.25 2.25 0 0 1 12.293 17H7.707a2.25 2.25 0 0 1-2.232-2.393L4.845 5.5H4.25a.75.75 0 0 1 0-1.5H5.75Zm1.34 2a.75.75 0 0 1 .806.69l.5 6.5a.75.75 0 0 1-1.493.116l-.5-6.5a.75.75 0 0 1 .687-.806Zm6.508.806a.75.75 0 0 0-1.494-.116l-.5 6.5a.75.75 0 0 0 1.493.116l.5-6.5Z"/></svg>`;
+        btn.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          await deleteRun(runId, btn, pick(run, 'resultsDirectory'));
         });
         return btn;
       }
@@ -1305,6 +1325,42 @@
           if (button) {
             button.disabled = false;
             button.classList.remove('spinning');
+          }
+        }
+      }
+
+      async function deleteRun(runId, button, resultsDir) {
+        if (!runId) return;
+        const confirmation = window.confirm(`Delete run '${runId}'? This will stop training (if running) and permanently remove its files.`);
+        if (!confirmation) {
+          el.runsNote.textContent = 'Delete canceled.';
+          return;
+        }
+        const originalHtml = button?.innerHTML;
+        if (button) {
+          button.disabled = true;
+          button.classList.add('spinning');
+        }
+        try {
+          const payload = { runId, confirm: true };
+          if (resultsDir) payload.resultsDir = resultsDir;
+          const result = await postJson(`${state.apiBase}/train/delete`, payload);
+          const message = pick(result, 'message') || `Deleted ${runId}.`;
+          el.runsNote.textContent = message;
+          await refreshAll();
+        } catch (err) {
+          console.error(err);
+          const message = (err?.message || 'Failed to delete run.').trim();
+          el.runsNote.textContent = message;
+          if (button) {
+            button.classList.add('error');
+            setTimeout(() => button.classList.remove('error'), 1400);
+          }
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.classList.remove('spinning');
+            if (originalHtml) button.innerHTML = originalHtml;
           }
         }
       }

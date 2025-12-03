@@ -59,6 +59,12 @@ const archiveSchema = z.object({
   resultsDir: z.string().optional(),
 });
 
+const deleteRunSchema = z.object({
+  runId: z.string(),
+  resultsDir: z.string().optional(),
+  confirm: z.boolean().default(true),
+});
+
 const tensorboardStartSchema = z.object({
   resultsDir: z.string().optional(),
   runId: z.string().optional(),
@@ -172,6 +178,19 @@ server.registerTool(
   },
   async (input) => {
     const json = await postJson<unknown>("/train/archive", normalizeBody(input));
+    return asText(JSON.stringify(json, null, 2));
+  }
+);
+
+server.registerTool(
+  "train-delete",
+  {
+    description: "Delete a mentor-cli training run (stops if running, removes files) via mentor-api. Confirmation is required.",
+    inputSchema: deleteRunSchema,
+  },
+  async (input) => {
+    const body = normalizeBody({ ...input, confirm: true });
+    const json = await postJson<unknown>("/train/delete", body);
     return asText(JSON.stringify(json, null, 2));
   }
 );
