@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net.NetworkInformation;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MentorTrainingRunner;
@@ -80,6 +81,31 @@ app.MapGet("/train-status/{runId}", (string runId, string? resultsDir) =>
     }
     var status = runStore.GetStatus(runId, resultsDir);
     return Results.Ok(status);
+});
+app.MapGet("/train/log/{runId}", (string runId, string? resultsDir, long? from) =>
+{
+    if (string.IsNullOrWhiteSpace(runId))
+    {
+        return Results.BadRequest(new { error = "runId is required." });
+    }
+
+    var start = Math.Max(0, from ?? 0);
+    var result = runStore.ReadLog(runId.Trim(), resultsDir, start);
+    if (!result.Found)
+    {
+        return Results.NotFound(new { error = result.Error ?? $"Log for '{runId}' not found.", logPath = result.LogPath });
+    }
+
+    return Results.Ok(new
+    {
+        runId = runId.Trim(),
+        logPath = result.LogPath,
+        from = result.From,
+        to = result.To,
+        size = result.Size,
+        eof = result.EndOfFile,
+        content = result.Content
+    });
 });
 app.MapPost("/train/resume-flag", (ResumeFlagRequest request) =>
 {
@@ -621,6 +647,7 @@ internal sealed class TrainingRunStore
     private const int BasePortBlockSize = 20;
     private const int BasePortStride = BasePortBlockSize;
     private const int MaxBasePortProbes = 200;
+    private const int MaxLogReadBytes = 256_000;
     private static readonly HashSet<string> AllowedTrainingProcessNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "mlagents-learn",
@@ -636,6 +663,12 @@ internal sealed class TrainingRunStore
     private readonly Dictionary<string, TensorboardInstance> _tensorboards = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _syncRoot = new();
     private sealed record TensorboardInstance(Process Process, string ResultsDirectory, string? RunId, int Port);
+    internal sealed record LogReadResult(bool Found, string? LogPath, string Content, long From, long To, long Size, bool EndOfFile, string? Error)
+    {
+        public static LogReadResult Success(string path, string content, long from, long to, long size, bool eof) => new(true, path, content, from, to, size, eof, null);
+        public static LogReadResult NotFound(string? path, string message) => new(false, path, string.Empty, 0, 0, 0, true, message);
+        public static LogReadResult Failure(string? path, string message) => new(false, path, string.Empty, 0, 0, 0, true, message);
+    }
     public CancelRunResult Cancel(string runId, string? resultsDirOverride)
     {
         lock (_syncRoot)
@@ -1545,6 +1578,48 @@ internal sealed class TrainingRunStore
         }
         var envPath = metadata.EnvPath;
         return new TrainingRunParameters(envPath, metadata.ConfigPath, metadata.CondaEnvironmentName, metadata.NoGraphics, metadata.SkipConda, metadata.LaunchTensorboard, metadata.BasePort, HasEnvExecutable: !string.IsNullOrWhiteSpace(envPath), ResumeOnStart: metadata.ResumeOnStart, Resume: metadata.Resume, StopRequested: metadata.StopRequested);
+    }
+    public LogReadResult ReadLog(string runId, string? resultsDirOverride, long fromByte = 0, int maxBytes = MaxLogReadBytes)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return LogReadResult.NotFound(null, "runId is required.");
+        }
+
+        var normalizedRunId = runId.Trim();
+        TrainingRunState? tracked = null;
+        lock (_syncRoot)
+        {
+            _runs.TryGetValue(normalizedRunId, out tracked);
+        }
+
+        var resultsDir = ResolveResultsDirectory(resultsDirOverride ?? tracked?.ResultsDirectory);
+        var logPath = BuildLogPath(resultsDir, normalizedRunId);
+        if (string.IsNullOrWhiteSpace(logPath) || !File.Exists(logPath))
+        {
+            return LogReadResult.NotFound(logPath, $"Log file not found for '{normalizedRunId}'.");
+        }
+
+        try
+        {
+            using var stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var size = stream.Length;
+            var safeFrom = Math.Max(0, Math.Min(fromByte, size));
+            stream.Seek(safeFrom, SeekOrigin.Begin);
+            var remaining = size - safeFrom;
+            var boundedMax = Math.Min(Math.Max(0, maxBytes), MaxLogReadBytes);
+            var readBytes = (int)Math.Min(boundedMax, remaining);
+            var buffer = readBytes > 0 ? new byte[readBytes] : Array.Empty<byte>();
+            var count = readBytes > 0 ? stream.Read(buffer, 0, readBytes) : 0;
+            var content = count > 0 ? Encoding.UTF8.GetString(buffer, 0, count) : string.Empty;
+            var next = safeFrom + count;
+            var eof = next >= size;
+            return LogReadResult.Success(logPath, content, safeFrom, next, size, eof);
+        }
+        catch (Exception ex)
+        {
+            return LogReadResult.Failure(logPath, ex.Message);
+        }
     }
     internal static string BuildLogPath(string resultsDirectory, string runId)
     {

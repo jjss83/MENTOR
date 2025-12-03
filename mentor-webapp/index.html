@@ -511,7 +511,7 @@
       font-size: 12px;
       white-space: pre-wrap;
       max-height: var(--log-height);
-      overflow: hidden;
+      overflow: auto;
     }
     .log-actions {
       display: flex;
@@ -715,6 +715,7 @@
         knownEnvExecutables: [],
         hiddenRuns: new Set(),
         lastRuns: [],
+        logCache: new Map(),
         tensorboardUrl: null,
         forceTensorboardReload: false,
       };
@@ -789,6 +790,7 @@
         if (!value) return;
         state.apiBase = value.trim().replace(/\/$/, '');
         localStorage.setItem('mentorApiBase', state.apiBase);
+        state.logCache.clear();
       }
 
       function setRefreshMs(seconds) {
@@ -852,6 +854,105 @@
           return `file://${encodeURI(normalized)}`;
         }
         return null;
+      }
+
+      function getCachedLog(runId) {
+        if (!runId) return null;
+        return state.logCache.get(runId) || null;
+      }
+
+      function findRunById(runId) {
+        if (!runId) return null;
+        return state.lastRuns.find(r => pick(r, 'runId') === runId) || null;
+      }
+
+      function getLogText(runId, run) {
+        const cache = getCachedLog(runId);
+        if (cache?.error) {
+          return `Log unavailable: ${cache.error}`;
+        }
+        if (cache?.content) {
+          return cache.content;
+        }
+        const tail = pick(run, 'logTail');
+        if (Array.isArray(tail) && tail.length) {
+          return tail.filter(Boolean).join('\n');
+        }
+        return 'Waiting for log output...';
+      }
+
+      function applyLogCacheToView() {
+        document.querySelectorAll('.log[data-run-id]').forEach(el => {
+          const runId = el.dataset.runId;
+          if (!runId) return;
+          const cache = getCachedLog(runId);
+          const run = findRunById(runId);
+          let text = cache?.error ? `Log unavailable: ${cache.error}` : (cache?.content || '');
+          if (!text && run) {
+            const tail = pick(run, 'logTail');
+            if (Array.isArray(tail) && tail.length) {
+              text = tail.filter(Boolean).join('\n');
+            }
+          }
+          el.textContent = text || 'Waiting for log output...';
+          el.scrollTop = el.scrollHeight;
+        });
+      }
+
+      async function fetchLogSegment(run) {
+        const runId = pick(run, 'runId');
+        if (!runId) return;
+        const resultsDir = pick(run, 'resultsDirectory');
+        const cached = getCachedLog(runId);
+        const params = new URLSearchParams();
+        if (resultsDir) params.set('resultsDir', resultsDir);
+        if (cached?.to) params.set('from', cached.to);
+        const query = params.toString();
+        const url = `${state.apiBase}/train/log/${encodeURIComponent(runId)}${query ? `?${query}` : ''}`;
+        const data = await fetchJson(url);
+        const from = Number(data?.from ?? 0);
+        const to = Number(data?.to ?? from);
+        const size = Number(data?.size ?? to);
+        const content = typeof data?.content === 'string' ? data.content : '';
+        const reset = !cached || from === 0 || from < (cached.to ?? 0);
+        const mergedContent = reset ? content : `${cached.content}${content}`;
+        const entry = {
+          content: mergedContent,
+          to: Number.isFinite(to) ? to : (reset ? mergedContent.length : cached?.to ?? 0),
+          size: Number.isFinite(size) ? size : (cached?.size ?? 0),
+          eof: !!data?.eof,
+          logPath: data?.logPath || cached?.logPath || deriveLogPath(run),
+          error: null,
+        };
+        state.logCache.set(runId, entry);
+      }
+
+      async function refreshLogs(runs) {
+        const list = Array.isArray(runs) ? runs : [];
+        const validIds = new Set(list.map(r => pick(r, 'runId')).filter(Boolean));
+        Array.from(state.logCache.keys()).forEach(key => {
+          if (!validIds.has(key)) {
+            state.logCache.delete(key);
+          }
+        });
+        const tasks = list.map(run => fetchLogSegment(run).catch(err => {
+          const runId = pick(run, 'runId');
+          if (!runId) return;
+          const existing = getCachedLog(runId) || {};
+          state.logCache.set(runId, {
+            ...existing,
+            content: existing.content || '',
+            to: existing.to || 0,
+            size: existing.size || 0,
+            eof: existing.eof || false,
+            logPath: existing.logPath || deriveLogPath(run),
+            error: err?.message || 'Failed to load log.',
+          });
+        }));
+        if (tasks.length) {
+          await Promise.allSettled(tasks);
+        }
+        applyLogCacheToView();
       }
 
       async function fetchJson(url) {
@@ -971,6 +1072,7 @@
         el.runsNote.textContent = `${list.length} run${list.length === 1 ? '' : 's'} tracked`;
         renderTensorboard(list, state.forceTensorboardReload);
         updateSelectionChip();
+        applyLogCacheToView();
       }
 
       function buildCard(run) {
@@ -979,10 +1081,11 @@
         const header = document.createElement('div');
         header.className = 'card-header';
         const runId = pick(run, 'runId') || 'Unknown run';
+        const cachedLog = getCachedLog(runId);
         const runParams = pick(run, 'parameters') || {};
         const resumeFlag = pick(run, 'resumeOnStart') ?? pick(runParams, 'resumeOnStart');
         const isCompleted = !!pick(run, 'completed');
-        const logPath = deriveLogPath(run);
+        const logPath = cachedLog?.logPath || deriveLogPath(run);
         const logUrl = toFileUrl(logPath) ?? logPath;
         const selection = document.createElement('input');
         selection.type = 'checkbox';
@@ -1066,9 +1169,10 @@
 
         const log = document.createElement('div');
         log.className = 'log';
-        const logTail = pick(run, 'logTail');
-        const logs = Array.isArray(logTail) ? logTail.filter(Boolean) : [];
-        log.textContent = logs.length ? logs.join('\n') : 'Waiting for log output...';
+        if (runId) {
+          log.dataset.runId = runId;
+        }
+        log.textContent = getLogText(runId, run);
         const logActions = document.createElement('div');
         logActions.className = 'log-actions';
         const openLogBtn = document.createElement('button');
@@ -1581,14 +1685,17 @@
       }
 
       async function refreshAll() {
-        await Promise.all([
-          updateHealth(),
-          fetchJson(`${state.apiBase}/train-status`).then(data => renderRuns(data)).catch(err => {
-            console.error(err);
-            renderRuns([], 'Unable to load runs.');
-          }),
-          updateProcessStatus().catch(() => {})
-        ]);
+        const healthPromise = updateHealth();
+        const processPromise = updateProcessStatus().catch(() => {});
+        try {
+          const runs = await fetchJson(`${state.apiBase}/train-status`);
+          renderRuns(runs);
+          await refreshLogs(runs);
+        } catch (err) {
+          console.error(err);
+          renderRuns([], 'Unable to load runs.');
+        }
+        await Promise.all([healthPromise, processPromise]);
         const now = new Date();
         el.updatedLabel.textContent = now.toLocaleTimeString();
         state.forceTensorboardReload = false;
