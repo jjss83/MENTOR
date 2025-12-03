@@ -195,7 +195,7 @@ server.registerTool(
 server.registerTool(
   "process-status",
   {
-    description: "Report mlagents-learn process count and running env executables via mentor-api",
+    description: "Report mlagents-learn process count and running env executable counts via mentor-api",
     inputSchema: processStatusSchema,
   },
   async (input) => {

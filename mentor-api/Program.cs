@@ -297,7 +297,8 @@ internal sealed record DashboardStatusPayload(bool Running, string Url, string? 
 internal sealed record DashboardStartResult(bool Started, bool AlreadyRunning, string? Url, string? Message, int? ProcessId);
 internal sealed record DashboardStopResult(bool Stopped, bool AlreadyStopped, string? Message);
 internal sealed record ArchiveRunResult(bool Success, string? Message, string? ArchivedTo);
-internal sealed record ProcessStatusPayload(string ResultsDirectory, int MlagentsLearnProcesses, IReadOnlyList<string> KnownEnvExecutables, IReadOnlyList<string> RunningEnvExecutables);
+internal sealed record EnvProcessStatus(string Executable, int Count);
+internal sealed record ProcessStatusPayload(string ResultsDirectory, int MlagentsLearnProcesses, IReadOnlyList<string> KnownEnvExecutables, IReadOnlyList<string> RunningEnvExecutables, IReadOnlyList<EnvProcessStatus> RunningEnvProcesses);
 internal sealed record KillProcessRequest(string Executable, string? ResultsDir);
 internal sealed record KillProcessResult(string RequestedExecutable, int MatchedProcesses, int KilledProcesses, IReadOnlyList<string> TargetProcesses, IReadOnlyList<string> Errors);
 internal sealed record TrainingStatusPayload(string RunId, string Status, bool Completed, int? ExitCode, string? ResultsDirectory, string? TrainingStatusPath, string? Message, string? TensorboardUrl, string? LogPath, IReadOnlyList<string>? LogTail, TrainingRunParameters? Parameters, bool ResumeOnStart, int? ProcessId = null, bool ProcessAlive = false, bool CanResume = false)
@@ -1657,7 +1658,8 @@ internal static class ProcessStatusReader
         var resultsDirectory = TrainingRunStore.ResolveResultsDirectory(resultsDirOverride);
         var knownEnvExecutables = DiscoverEnvExecutables(resultsDirectory);
         var (mlagentsCount, runningEnvs) = InspectProcesses(knownEnvExecutables);
-        return new ProcessStatusPayload(resultsDirectory, mlagentsCount, knownEnvExecutables, runningEnvs);
+        var runningEnvNames = runningEnvs.Select(p => p.Executable).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return new ProcessStatusPayload(resultsDirectory, mlagentsCount, knownEnvExecutables, runningEnvNames, runningEnvs);
     }
 
     public static KillProcessResult Kill(KillProcessRequest request)
@@ -1761,10 +1763,10 @@ internal static class ProcessStatusReader
         return names.ToArray();
     }
 
-    private static (int mlagentsCount, IReadOnlyList<string> runningEnvExecutables) InspectProcesses(IReadOnlyCollection<string> envExeNames)
+    private static (int mlagentsCount, IReadOnlyList<EnvProcessStatus> runningEnvExecutables) InspectProcesses(IReadOnlyCollection<string> envExeNames)
     {
         var mlagentsCount = 0;
-        var runningEnvNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var runningEnvCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         var envFileNames = new HashSet<string>(envExeNames, StringComparer.OrdinalIgnoreCase);
         var envBaseNames = envExeNames
@@ -1787,35 +1789,47 @@ internal static class ProcessStatusReader
                     continue;
                 }
 
+                string? canonicalName = null;
+
                 if (!string.IsNullOrWhiteSpace(processName) && envBaseNames.TryGetValue(processName, out var canonical))
                 {
-                    runningEnvNames.Add(canonical);
-                    continue;
+                    canonicalName = canonical;
+                }
+                else
+                {
+                    var moduleFile = SafeGetMainModuleFile(process);
+                    if (string.IsNullOrWhiteSpace(moduleFile))
+                    {
+                        continue;
+                    }
+
+                    var fileName = Path.GetFileName(moduleFile);
+                    if (string.IsNullOrWhiteSpace(fileName))
+                    {
+                        continue;
+                    }
+
+                    if (envFileNames.Contains(fileName))
+                    {
+                        canonicalName = fileName;
+                    }
+                    else
+                    {
+                        var baseName = Path.GetFileNameWithoutExtension(fileName);
+                        if (!string.IsNullOrWhiteSpace(baseName) && envBaseNames.TryGetValue(baseName, out var mapped))
+                        {
+                            canonicalName = mapped;
+                        }
+                    }
                 }
 
-                var moduleFile = SafeGetMainModuleFile(process);
-                if (string.IsNullOrWhiteSpace(moduleFile))
+                if (string.IsNullOrWhiteSpace(canonicalName))
                 {
                     continue;
                 }
 
-                var fileName = Path.GetFileName(moduleFile);
-                if (string.IsNullOrWhiteSpace(fileName))
-                {
-                    continue;
-                }
-
-                if (envFileNames.Contains(fileName))
-                {
-                    runningEnvNames.Add(fileName);
-                    continue;
-                }
-
-                var baseName = Path.GetFileNameWithoutExtension(fileName);
-                if (!string.IsNullOrWhiteSpace(baseName) && envBaseNames.TryGetValue(baseName, out var mapped))
-                {
-                    runningEnvNames.Add(mapped);
-                }
+                runningEnvCounts.TryGetValue(canonicalName, out var current);
+                runningEnvCounts[canonicalName] = current + 1;
             }
             catch
             {
@@ -1834,7 +1848,12 @@ internal static class ProcessStatusReader
             }
         }
 
-        return (mlagentsCount, runningEnvNames.ToArray());
+        var running = runningEnvCounts
+            .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(kvp => new EnvProcessStatus(kvp.Key, kvp.Value))
+            .ToArray();
+
+        return (mlagentsCount, running);
     }
 
     private static HashSet<string> BuildAllowedTargets(IEnumerable<string> knownEnvExecutables)

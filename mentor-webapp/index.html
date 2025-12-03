@@ -404,7 +404,7 @@
       align-items: center;
       gap: 10px;
     }
-    .card-actions { display: inline-flex; align-items: center; gap: 8px; }
+    .card-actions { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
     .run-id {
       font-weight: 700;
       font-size: 16px;
@@ -435,15 +435,66 @@
     .status-stopped .status-dot { background: var(--muted); }
     .status-unknown .status-dot { background: #94a3b8; }
     .status-not-found .status-dot { background: #94a3b8; }
-    .meta-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
-    .meta {
-      padding: 10px 12px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.04);
+    .detail-textarea { cursor: default; user-select: text; }
+    .detail-attributes {
       border: 1px solid var(--stroke);
-      font-size: 13px;
+      border-radius: 14px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.02);
+      font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      min-height: 110px;
     }
+    .attr-chip {
+      border-left: 4px solid rgba(125, 211, 252, 0.6);
+      padding: 6px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 46px;
+      background: transparent;
+    }
+    .attr-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+    .attr-value {
+      font-size: 13px;
+      color: var(--text);
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+        .attr-empty {
+          grid-column: 1 / -1;
+          text-align: center;
+          color: var(--muted);
+          font-size: 13px;
+          padding: 6px 0;
+        }
+    .attr-path { border-color: rgba(125, 211, 252, 0.7); }
+    .attr-status { border-color: rgba(110, 231, 183, 0.7); }
+    .attr-warning { border-color: rgba(246, 194, 99, 0.8); }
+    .attr-log { border-color: rgba(148, 163, 184, 0.7); }
+    .attr-flag { border-color: rgba(125, 86, 252, 0.7); }
+    .attr-config { border-color: rgba(244, 114, 182, 0.7); }
     .label { color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+    @media (max-width: 640px) {
+      .detail-attributes { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+    }
+    .resume-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--stroke);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .resume-inline input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
     .log {
       background: rgba(0, 0, 0, 0.35);
       border: 1px solid var(--stroke);
@@ -477,6 +528,7 @@
       .page { padding: 22px 18px 32px; }
       h1 { font-size: 28px; }
       .card { padding: 14px; }
+      .details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -608,10 +660,11 @@
                   <tr>
                     <th>Executable</th>
                     <th>Status</th>
+                    <th>Running</th>
                   </tr>
                 </thead>
                 <tbody id="env-table-body">
-                  <tr><td colspan="2" class="muted">Waiting for process info...</td></tr>
+                  <tr><td colspan="3" class="muted">Waiting for process info...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -957,56 +1010,23 @@
         const archiveBtn = createArchiveButton(runId);
         const stopBtn = createStopButton(runId, statusText, run);
         const resumeBtn = createResumeButton(runId, statusText, isCompleted, run);
-        const actions = document.createElement('div');
-        actions.className = 'card-actions';
-        if (stopBtn) actions.append(stopBtn);
-        if (resumeBtn) actions.append(resumeBtn);
-        actions.append(archiveBtn, chip);
-        header.append(selectionWrap, id, actions);
-
-        const metaRow = document.createElement('div');
-        metaRow.className = 'meta-row';
-        metaRow.append(
-          createMeta('Results', pick(run, 'resultsDirectory') || '-'),
-          createMeta('Training status', pick(run, 'trainingStatusPath') || '-'),
-          createMeta('TensorBoard URL', pick(run, 'tensorboardUrl') || '-'),
-          createMeta('Log path', logPath || '-'),
-          createMeta('Exit code', pick(run, 'exitCode') ?? '-')
-        );
-
-        const paramsRow = document.createElement('div');
-        paramsRow.className = 'meta-row';
-        paramsRow.append(
-          createMeta('Env path', pick(runParams, 'envPath') || '-'),
-          createMeta('Config', pick(runParams, 'configPath') || '-'),
-          createMeta('Conda env', pick(runParams, 'condaEnv') || '-'),
-          createMeta('Base port', pick(runParams, 'basePort') ?? '-'),
-          createMeta('Graphics', formatFlag(pick(runParams, 'noGraphics'), 'No graphics', 'Graphics enabled')),
-          createMeta('Env executable', formatFlag(pick(runParams, 'hasEnvExecutable'), 'Yes', 'No')),
-          createMeta('Skip conda', formatFlag(pick(runParams, 'skipConda'), 'Skip', 'Use conda')),
-          createMeta('Launch TensorBoard', formatFlag(pick(runParams, 'tensorboard'), 'Yes', 'No')),
-          createMeta('Resume on start', formatFlag(resumeFlag, 'Resume enabled', 'Start fresh'))
-        );
-        const resumeRow = document.createElement('div');
-        resumeRow.className = 'meta';
-        const resumeLabel = document.createElement('div');
-        resumeLabel.className = 'label';
-        resumeLabel.textContent = 'Resume on API start';
-        const resumeControl = document.createElement('div');
-        resumeControl.style.display = 'flex';
-        resumeControl.style.alignItems = 'center';
-        resumeControl.style.gap = '8px';
+        const resumeInline = document.createElement('div');
+        resumeInline.className = 'resume-inline';
         const resumeToggle = document.createElement('input');
         resumeToggle.type = 'checkbox';
         resumeToggle.checked = isCompleted ? false : !!resumeFlag;
+        resumeToggle.disabled = isCompleted;
         resumeToggle.addEventListener('click', (event) => event.stopPropagation());
+        const resumeLabel = document.createElement('div');
+        resumeLabel.className = 'pill-label';
+        resumeLabel.textContent = 'Resume on API start';
         const resumeNote = document.createElement('div');
         resumeNote.className = 'pill-label';
+        const setResumeNote = (text) => { resumeNote.textContent = text; };
         if (isCompleted) {
-          resumeToggle.disabled = true;
-          resumeNote.textContent = 'Completed runs cannot auto-resume';
+          setResumeNote('Completed runs cannot auto-resume');
         } else {
-          resumeNote.textContent = resumeToggle.checked ? 'Will resume automatically' : 'Disabled by default';
+          setResumeNote(resumeToggle.checked ? 'Will resume automatically' : 'Disabled by default');
         }
         resumeToggle.addEventListener('change', async (event) => {
           if (isCompleted) {
@@ -1015,21 +1035,27 @@
           }
           const desired = event.target.checked;
           resumeToggle.disabled = true;
-          resumeNote.textContent = desired ? 'Marking...' : 'Updating...';
+          setResumeNote(desired ? 'Marking...' : 'Updating...');
           try {
             await postJson(`${state.apiBase}/train/resume-flag`, { runId, resumeOnStart: desired, resultsDir: pick(run, 'resultsDirectory') });
-            resumeNote.textContent = desired ? 'Will resume automatically' : 'Will not auto-resume';
+            setResumeNote(desired ? 'Will resume automatically' : 'Will not auto-resume');
             await refreshAll();
           } catch (err) {
             console.error(err);
             resumeToggle.checked = !desired;
-            resumeNote.textContent = err?.message || 'Failed to update';
+            setResumeNote(err?.message || 'Failed to update');
           } finally {
             resumeToggle.disabled = false;
           }
         });
-        resumeControl.append(resumeToggle, resumeNote);
-        resumeRow.append(resumeLabel, resumeControl);
+        resumeInline.append(resumeToggle, resumeLabel, resumeNote);
+
+        const actions = document.createElement('div');
+        actions.className = 'card-actions';
+        if (stopBtn) actions.append(stopBtn);
+        if (resumeBtn) actions.append(resumeBtn);
+        actions.append(resumeInline, archiveBtn, chip);
+        header.append(selectionWrap, id, actions);
 
         const log = document.createElement('div');
         log.className = 'log';
@@ -1056,20 +1082,8 @@
 
         const detailsWrap = document.createElement('div');
         detailsWrap.className = 'card-details';
-        const message = pick(run, 'message');
-        if (message) {
-          const msg = document.createElement('div');
-          msg.className = 'meta';
-          const labelEl = document.createElement('div');
-          labelEl.className = 'label';
-          labelEl.textContent = 'Message';
-          const text = document.createElement('div');
-          text.textContent = message;
-          msg.append(labelEl, text);
-          detailsWrap.append(metaRow, paramsRow, resumeRow, msg, log, logActions);
-        } else {
-          detailsWrap.append(metaRow, paramsRow, resumeRow, log, logActions);
-        }
+        const attributeArea = buildAttributeArea(run, runParams, logPath);
+        detailsWrap.append(attributeArea, log, logActions);
 
         detailsWrap.hidden = !detailsVisible;
         card.append(header, detailsWrap);
@@ -1129,19 +1143,63 @@
       function formatFlag(value, truthyLabel = 'Yes', falsyLabel = 'No') {
         if (value === true) return truthyLabel;
         if (value === false) return falsyLabel;
-        return '-';
+        return null;
       }
 
-      function createMeta(label, value) {
-        const wrap = document.createElement('div');
-        wrap.className = 'meta';
-        const l = document.createElement('div');
-        l.className = 'label';
-        l.textContent = label;
-        const v = document.createElement('div');
-        v.textContent = value;
-        wrap.append(l, v);
-        return wrap;
+      function hasContent(value) {
+        if (value === null || value === undefined) return false;
+        if (typeof value === 'string') {
+          return value.trim().length > 0;
+        }
+        return true;
+      }
+
+      function buildAttributeArea(run, runParams, logPath) {
+        const list = [
+          { label: 'Results', value: pick(run, 'resultsDirectory'), kind: 'path' },
+          { label: 'Training status', value: pick(run, 'trainingStatusPath'), kind: 'path' },
+          { label: 'TensorBoard URL', value: pick(run, 'tensorboardUrl'), kind: 'path' },
+          { label: 'Log path', value: logPath, kind: 'log' },
+          { label: 'Exit code', value: pick(run, 'exitCode'), kind: 'status' },
+          { label: 'Env path', value: pick(runParams, 'envPath'), kind: 'path' },
+          { label: 'Config', value: pick(runParams, 'configPath'), kind: 'config' },
+          { label: 'Conda env', value: pick(runParams, 'condaEnv'), kind: 'config' },
+          { label: 'Base port', value: pick(runParams, 'basePort'), kind: 'status' },
+          { label: 'Graphics', value: formatFlag(pick(runParams, 'noGraphics'), 'No graphics', 'Graphics enabled'), kind: 'flag' },
+          { label: 'Env executable', value: formatFlag(pick(runParams, 'hasEnvExecutable'), 'Yes', 'No'), kind: 'flag' },
+          { label: 'Skip conda', value: formatFlag(pick(runParams, 'skipConda'), 'Skip', 'Use conda'), kind: 'flag' },
+          { label: 'Launch TensorBoard', value: formatFlag(pick(runParams, 'tensorboard'), 'Yes', 'No'), kind: 'flag' },
+          { label: 'Message', value: pick(run, 'message'), kind: 'warning' }
+        ];
+        const area = document.createElement('div');
+        area.className = 'detail-attributes detail-textarea';
+        area.setAttribute('role', 'textbox');
+        area.setAttribute('aria-readonly', 'true');
+        list.forEach(item => {
+          if (!hasContent(item.value)) return;
+          area.append(createAttrChip(item));
+        });
+        if (!area.childElementCount) {
+          const empty = document.createElement('div');
+          empty.className = 'attr-empty';
+          empty.textContent = 'No run metadata available.';
+          area.append(empty);
+        }
+        return area;
+      }
+
+      function createAttrChip(attr) {
+        const chip = document.createElement('div');
+        chip.className = `attr-chip attr-${attr.kind || 'log'}`;
+        const label = document.createElement('div');
+        label.className = 'attr-label';
+        label.textContent = attr.label;
+        const value = document.createElement('div');
+        value.className = 'attr-value';
+        const textValue = typeof attr.value === 'number' ? String(attr.value) : String(attr.value);
+        value.textContent = textValue;
+        chip.append(label, value);
+        return chip;
       }
 
       function toggleRunSelection(runId, selected) {
@@ -1356,7 +1414,7 @@
 
         if (processError) {
           el.mlagentsTableBody.innerHTML = `<tr><td colspan="3" class="muted">Process info unavailable.</td></tr>`;
-          el.envTableBody.innerHTML = `<tr><td colspan="2" class="muted">Process info unavailable.</td></tr>`;
+          el.envTableBody.innerHTML = `<tr><td colspan="3" class="muted">Process info unavailable.</td></tr>`;
           el.envNote.textContent = 'Refresh or verify the API to restore process visibility.';
           state.knownEnvExecutables = [];
           updateKillOptions(state.knownEnvExecutables);
@@ -1376,6 +1434,22 @@
           const value = pick(data, 'runningEnvExecutables');
           return Array.isArray(value) ? value.filter(Boolean) : [];
         })();
+        const runningDetails = (() => {
+          const value = pick(data, 'runningEnvProcesses');
+          if (!Array.isArray(value)) {
+            return [];
+          }
+          return value
+            .map(item => {
+              const executable = pick(item, 'executable') || pick(item, 'Executable');
+              const countValue = Number(pick(item, 'count') ?? pick(item, 'Count') ?? 0);
+              const safeCount = Number.isFinite(countValue) && countValue > 0 ? countValue : 0;
+              return executable ? { executable, count: safeCount } : null;
+            })
+            .filter(Boolean);
+        })();
+        const runningCountByName = new Map(runningDetails.map(item => [item.executable, item.count]));
+        const totalRunningEnvProcesses = runningDetails.reduce((sum, item) => sum + item.count, 0);
         const known = (() => {
           const value = pick(data, 'knownEnvExecutables');
           return Array.isArray(value) ? value.filter(Boolean) : [];
@@ -1387,22 +1461,25 @@
 
         el.envTableBody.innerHTML = '';
         if (!merged.length) {
-          el.envTableBody.innerHTML = `<tr><td colspan="2" class="muted">No env executables discovered yet.</td></tr>`;
+          el.envTableBody.innerHTML = `<tr><td colspan="3" class="muted">No env executables discovered yet.</td></tr>`;
         } else {
           merged.sort((a, b) => a.localeCompare(b));
           merged.forEach(name => {
-            const isRunning = running.includes(name);
+            const runningCount = runningCountByName.get(name) ?? 0;
+            const isRunning = runningCount > 0;
             const row = document.createElement('tr');
             row.innerHTML = `
               <td>${name}</td>
               <td><span class="badge ${isRunning ? 'success' : 'idle'}"><span class="badge-dot"></span>${isRunning ? 'Running' : 'Idle'}</span></td>
+              <td>${runningCount}</td>
             `;
             el.envTableBody.append(row);
           });
         }
 
         if (known.length) {
-          el.envNote.textContent = `Tracking ${known.length} env exe${known.length === 1 ? '' : 's'} from results folders.`;
+          const runningSuffix = totalRunningEnvProcesses > 0 ? `, ${totalRunningEnvProcesses} running process${totalRunningEnvProcesses === 1 ? '' : 'es'}` : ', none running';
+          el.envNote.textContent = `Tracking ${known.length} env exe${known.length === 1 ? '' : 's'} from results folders${runningSuffix}.`;
         } else {
           el.envNote.textContent = 'No env executables discovered in results folders yet.';
         }
