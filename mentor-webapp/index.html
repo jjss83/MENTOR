@@ -589,11 +589,19 @@
       color: var(--text);
       font-size: 12px;
     }
-    .stage-chip.current { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.3); }
+    .stage-chip.current { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.3); background: rgba(125, 211, 252, 0.08); }
     .stage-badge {
       background: rgba(125, 211, 252, 0.12);
       color: var(--accent);
       padding: 3px 8px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 11px;
+    }
+    .stage-current {
+      background: var(--accent);
+      color: #0b0c0f;
+      padding: 2px 6px;
       border-radius: 999px;
       font-weight: 700;
       font-size: 11px;
@@ -1365,12 +1373,17 @@
 
       function createStopButton(runId, statusText, run) {
         const normalized = (statusText || '').toLowerCase();
-        if (normalized !== 'running') return null;
+        const processAlive = !!pick(run, 'processAlive');
+        const isCompleted = !!pick(run, 'completed');
+        const isStopping = normalized === 'stopping';
+        const canStop = !isCompleted && (normalized === 'running' || isStopping || processAlive);
+        if (!canStop) return null;
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'icon-btn secondary';
         btn.title = `Stop ${runId} for resume`;
-        btn.textContent = 'Stop';
+        btn.textContent = isStopping ? 'Stopping...' : 'Stop';
+        btn.disabled = isStopping;
         btn.addEventListener('click', async (event) => {
           event.stopPropagation();
           await stopRun(runId, btn, pick(run, 'resultsDirectory'));
@@ -1531,13 +1544,25 @@
         const list = document.createElement('div');
         list.className = 'stage-list';
         const stages = Array.isArray(pick(curriculum, 'stages')) ? pick(curriculum, 'stages') : [];
-        const currentStage = Number(pick(curriculum, 'currentStageIndex'));
-        const hasCurrentStage = Number.isFinite(currentStage);
+        const currentStageIndex = Number(pick(curriculum, 'currentStageIndex'));
+        const hasCurrentStageIndex = Number.isFinite(currentStageIndex);
+        const hasValidCurrentStage = hasCurrentStageIndex && Boolean(stages[currentStageIndex]);
+        if (hasValidCurrentStage) {
+          const summary = document.createElement('div');
+          summary.className = 'quick-meta';
+          const currentName = pick(stages[currentStageIndex], 'name') || `Stage ${currentStageIndex + 1}`;
+          summary.textContent = `Current stage: Stage ${currentStageIndex + 1} - ${currentName}`;
+          block.append(summary);
+        }
         stages.forEach((stage, idx) => {
           const chip = document.createElement('div');
           chip.className = 'stage-chip';
-          if (hasCurrentStage && currentStage === idx) {
+          let currentBadge = null;
+          if (hasValidCurrentStage && currentStageIndex === idx) {
             chip.classList.add('current');
+            currentBadge = document.createElement('span');
+            currentBadge.className = 'stage-current';
+            currentBadge.textContent = 'Current';
           }
           const badge = document.createElement('span');
           badge.className = 'stage-badge';
@@ -1557,15 +1582,18 @@
           if (details.length) {
             const meta = document.createElement('span');
             meta.className = 'quick-meta';
-            meta.textContent = details.join(' · ');
+            meta.textContent = details.join(' | ');
             chip.append(meta);
+          }
+          if (currentBadge) {
+            chip.append(currentBadge);
           }
           list.append(chip);
         });
 
         if (list.childElementCount) {
           block.append(list);
-          if (!hasCurrentStage) {
+          if (!hasValidCurrentStage) {
             const note = document.createElement('div');
             note.className = 'quick-meta';
             note.textContent = 'Stage not detected; showing all defined stages.';
@@ -2070,5 +2098,8 @@
   </script>
 </body>
 </html>
+
+
+
 
 
