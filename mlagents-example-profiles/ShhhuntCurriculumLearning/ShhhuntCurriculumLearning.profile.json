@@ -1,7 +1,7 @@
 {
   "id": "shhhunt-curriculum-learning",
   "name": "ShhhuntCurriculumLearning",
-  "setup": "ThirdPersonController-based Shhhunt arena wired for a four-phase curriculum. Trainer-driven environment parameter shhhunt_curriculum_stage toggles EnvironmentManager to sequentially reveal obstacles and structures while the TargetPositioner controls when the target may perch on geometry.",
+  "setup": "ThirdPersonController-based Shhhunt arena wired for a four-phase curriculum. Trainer-driven environment parameter shhhunt_curriculum_stage toggles EnvironmentManager to sequentially reveal obstacles and structures while the TargetPositioner controls when the target may perch on geometry. Lesson thresholds now ramp 0.6 → 0.75 → 0.9 so the agent hits obstacle practice sooner.",
   "goal": "Reach the glowing target in under 60 seconds no matter which curriculum phase is active, demonstrating stable locomotion before mastering obstacle climbs and elevated placements.",
   "agents": {
     "count": 1,
@@ -13,7 +13,8 @@
       "Dense shaping: distanceDelta * distanceRewardScale provides incremental credit for closing the gap every step.",
       "timePenalty (negative) applied each DecisionStep to encourage finishing well before the 60 s cutoff.",
       "+successfulJumpReward (0.05) when a grounded jump successfully lifts off; invalid jump requests incur invalidJumpPenalty.",
-      "obstacleCollisionPenalty hit whenever the CharacterController collides with tagged obstacles or structures.",
+      "obstacleCollisionPenalty (softened to -0.08) hit whenever the CharacterController collides with tagged obstacles or structures.",
+      "Elevated-target bonuses: progress bonus adds shaping when closing the gap while the target sits on geometry, and a completion bonus stacks when those elevated targets are tagged.",
       "Overtime penalty (−0.5) if the agent exceeds maxEpisodeSeconds without success.",
       "−1.0 when falling below fallThreshold or moving beyond maxDistanceFromTarget without progress."
     ]
@@ -34,7 +35,9 @@
     {"name": "timePenalty", "description": "Negative per-step penalty encouraging efficiency.", "default": -0.0002},
     {"name": "successfulJumpReward", "description": "Reward when a grounded jump successfully lifts off.", "default": 0.05},
     {"name": "invalidJumpPenalty", "description": "Penalty for invalid jump requests (airborne/cooldown).", "default": -0.02},
-    {"name": "obstacleCollisionPenalty", "description": "Penalty applied on obstacle or structure collisions.", "default": -0.1},
+    {"name": "obstacleCollisionPenalty", "description": "Penalty applied on obstacle or structure collisions.", "default": -0.08},
+    {"name": "elevatedTargetProgressBonus", "description": "Extra shaping multiplier when the agent reduces distance while the target sits on an obstacle.", "default": 0.02},
+    {"name": "elevatedTargetCompletionBonus", "description": "Bonus reward granted when the agent finishes an episode on an elevated target.", "default": 0.25},
     {"name": "targetOnObstacleYOffset", "description": "Height offset when target spawns on an obstacle.", "default": 0.15},
     {"name": "targetGroundYOffset", "description": "Height offset when target spawns on flat ground.", "default": 0.5},
     {"name": "spawnAreaSizeX", "description": "Width of the spawn area along X.", "default": 20.0},

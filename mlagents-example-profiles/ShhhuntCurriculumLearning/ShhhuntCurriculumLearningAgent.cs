@@ -6,7 +6,7 @@ using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
 using StarterAssets;
 using MLAgents.Shhhunt.Obstacles;
-using MLReachTargetObstacleAgent.Scripts;
+using MLAgents.Shhhunt.Curriculum;
 
 namespace MLAgents.Shhhunt.Curriculum
 {
@@ -14,7 +14,7 @@ namespace MLAgents.Shhhunt.Curriculum
     /// Curriculum-driven Reach Target agent that gradually unlocks obstacles, structures, and target placements.
     /// </summary>
     [RequireComponent(typeof(ThirdPersonControllerAdapter))]
-    public class ShhhuntCurriculumLearningAgent : Agent
+    public partial class ShhhuntCurriculumLearningAgent : Agent
     {
         [System.Serializable]
         private class CurriculumPhase
@@ -109,8 +109,10 @@ namespace MLAgents.Shhhunt.Curriculum
         [Header("Rewards & Penalties")]
         [SerializeField] private float distanceRewardScale = 0.01f;
         [SerializeField] private float timePenalty = -0.0002f;
-        [SerializeField] private float obstacleCollisionPenalty = -0.1f;
+        [SerializeField] private float obstacleCollisionPenalty = -0.08f;
         [SerializeField] private float invalidJumpPenalty = -0.02f;
+        [SerializeField] private float elevatedTargetProgressBonus = 0.02f;
+        [SerializeField] private float elevatedTargetCompletionBonus = 0.25f;
 
 #if UNITY_EDITOR
         [Header("Sensor Checklist")]
@@ -122,6 +124,14 @@ namespace MLAgents.Shhhunt.Curriculum
 #endif
 
         private const string CurriculumStageParameter = "shhhunt_curriculum_stage";
+        private const string StatSuccesses = "Shhhunt/Successes";
+        private const string StatFailures = "Shhhunt/Failures";
+        private const string StatTimeouts = "Shhhunt/Timeouts";
+        private const string StatOutOfBounds = "Shhhunt/OutOfBounds";
+        private const string StatFalls = "Shhhunt/Falls";
+        private const string StatTimeToTarget = "Shhhunt/TimeToTarget";
+        private const string StatGroundTargets = "Shhhunt/GroundTargets";
+        private const string StatObstacleTargets = "Shhhunt/ObstacleTargets";
 
         private readonly List<Collider> _cachedObstacleColliders = new List<Collider>();
         private float _lastDistanceToTarget;
@@ -132,6 +142,17 @@ namespace MLAgents.Shhhunt.Curriculum
         private bool _isCurrentlySprinting;
         private float _episodeTimer;
         private int _currentPhaseIndex;
+        private StatsRecorder _statsRecorder;
+
+        // Runtime stats (not serialized): shown read-only in a CustomEditor
+        private int _reachedTargetCount;
+        private float _bestTimeToTarget = float.PositiveInfinity;
+        private int _timeoutBeforeTargetCount;
+
+        // Public getters for Inspector display
+        public int ReachedTargetCount => _reachedTargetCount;
+        public float BestTimeToTarget => float.IsPositiveInfinity(_bestTimeToTarget) ? -1f : _bestTimeToTarget;
+        public int TimeoutBeforeTargetCount => _timeoutBeforeTargetCount;
 
         private CurriculumPhase CurrentPhase => curriculum.Count == 0
             ? new CurriculumPhase()
@@ -147,6 +168,7 @@ namespace MLAgents.Shhhunt.Curriculum
 
         public override void Initialize()
         {
+            _statsRecorder = Academy.Instance != null ? Academy.Instance.StatsRecorder : null;
             CacheObstacleColliders();
             _currentPhaseIndex = ResolveCurriculumStage();
         }
@@ -213,6 +235,9 @@ namespace MLAgents.Shhhunt.Curriculum
             if (_episodeTimer > maxEpisodeSeconds)
             {
                 AddReward(overtimePenalty);
+                // Count only timeouts as failures "before time's up"
+                _timeoutBeforeTargetCount++;
+                LogFailure(StatTimeouts);
                 EndEpisode();
                 return;
             }
@@ -255,45 +280,93 @@ namespace MLAgents.Shhhunt.Curriculum
         private void ApplyCurriculumPhase()
         {
             CurriculumPhase phase = CurrentPhase;
-            // Pseudocode placeholder for future per-phase hooks:
-            // switch (phase.id)
-            // {
-            //     case "GroundOnly":
-            //         // Disable every obstacle/structure and pin targets to ground.
-            //         break;
-            //     case "Obstacles":
-            //         // Enable only obstacles; keep structures hidden.
-            //         break;
-            //     case "Structures":
-            //         // Enable both obstacles and structures for extended parkour.
-            //         break;
-            //     case "TargetOnObstacles":
-            //         // Leave everything active and force target placement on elevated geometry.
-            //         break;
-            // }
-            if (environmentManager != null)
-            {
-                // Placeholder: when stage advances, invoke EnableAllObstacles/EnableAllStructure
-                // exactly once to avoid redundant SetActive calls.
-                if (phase.enableObstacles)
-                {
-                    environmentManager.EnableAllObstacles();
-                }
-                else
-                {
-                    environmentManager.DisableAllObstacles();
-                }
+            ApplyPhaseFlags(phase);
+            ApplyEnvironmentPhase(phase);
+        }
 
-                // Placeholder: Use FIFO helpers (EnableNextStructure / DisableNextStructure)
-                // if you want to reveal geometry gradually instead of toggling everything.
-                if (phase.enableStructures)
-                {
-                    environmentManager.EnableAllStructure();
-                }
-                else
-                {
+        private static void ApplyPhaseFlags(CurriculumPhase phase)
+        {
+            // Per-phase hooks: set phase flags explicitly based on id
+            // so environment toggles and target placement remain in sync.
+            switch (phase.id)
+            {
+                case "GroundOnly":
+                    phase.enableObstacles = false;
+                    phase.enableStructures = false;
+                    phase.allowTargetOnObstacles = false;
+                    phase.requireTargetOnObstacles = false;
+                    break;
+                case "Obstacles":
+                    phase.enableObstacles = true;
+                    phase.enableStructures = false;
+                    phase.allowTargetOnObstacles = false;
+                    phase.requireTargetOnObstacles = false;
+                    break;
+                case "Structures":
+                    phase.enableObstacles = true;
+                    phase.enableStructures = true;
+                    phase.allowTargetOnObstacles = false;
+                    phase.requireTargetOnObstacles = false;
+                    break;
+                case "TargetOnObstacles":
+                    phase.enableObstacles = true;
+                    phase.enableStructures = true;
+                    phase.allowTargetOnObstacles = true;
+                    phase.requireTargetOnObstacles = true;
+                    break;
+            }
+        }
+
+        private void ApplyEnvironmentPhase(CurriculumPhase phase)
+        {
+            if (environmentManager == null)
+            {
+                return;
+            }
+
+            // Progressive reveal: always reset to a known baseline, then
+            // gradually enable geometry as the curriculum advances.
+            switch (phase.id)
+            {
+                case "GroundOnly":
+                    environmentManager.DisableAllObstacles();
                     environmentManager.DisableAllStructure();
-                }
+                    break;
+                case "Obstacles":
+                    // Ground + some obstacles only. Keep structures off.
+                    environmentManager.DisableAllStructure();
+                    environmentManager.EnableNextObstacle();
+                    break;
+                case "Structures":
+                    // Obstacles fully available, progressively reveal structures.
+                    environmentManager.EnableAllObstacles();
+                    environmentManager.EnableNextStructure();
+                    break;
+                case "TargetOnObstacles":
+                    // Full environment: all obstacles/structures enabled.
+                    environmentManager.EnableAllObstacles();
+                    environmentManager.EnableAllStructure();
+                    break;
+                default:
+                    // Fallback: respect authored phase flags.
+                    if (phase.enableObstacles)
+                    {
+                        environmentManager.EnableAllObstacles();
+                    }
+                    else
+                    {
+                        environmentManager.DisableAllObstacles();
+                    }
+
+                    if (phase.enableStructures)
+                    {
+                        environmentManager.EnableAllStructure();
+                    }
+                    else
+                    {
+                        environmentManager.DisableAllStructure();
+                    }
+                    break;
             }
         }
 
@@ -525,6 +598,11 @@ namespace MLAgents.Shhhunt.Curriculum
             {
                 float timeBonus = Mathf.Clamp01(1f - (_episodeTimer / Mathf.Max(1f, maxEpisodeSeconds)));
                 AddReward(1f + timeBonus * 0.5f);
+                if (_targetCurrentlyOnObstacle)
+                {
+                    AddReward(elevatedTargetCompletionBonus);
+                }
+                RecordSuccess();
                 EndEpisode();
                 return true;
             }
@@ -532,6 +610,7 @@ namespace MLAgents.Shhhunt.Curriculum
             if (distanceToTarget > maxDistanceFromTarget)
             {
                 AddReward(-1f);
+                LogFailure(StatOutOfBounds);
                 EndEpisode();
                 return true;
             }
@@ -539,6 +618,7 @@ namespace MLAgents.Shhhunt.Curriculum
             if (transform.position.y < fallThreshold)
             {
                 AddReward(-1f);
+                LogFailure(StatFalls);
                 EndEpisode();
                 return true;
             }
@@ -550,6 +630,10 @@ namespace MLAgents.Shhhunt.Curriculum
         {
             float distanceDelta = _lastDistanceToTarget - distanceToTarget;
             AddReward(distanceDelta * distanceRewardScale);
+            if (_targetCurrentlyOnObstacle && distanceDelta > 0f)
+            {
+                AddReward(distanceDelta * elevatedTargetProgressBonus);
+            }
             _lastDistanceToTarget = distanceToTarget;
         }
 
@@ -564,6 +648,20 @@ namespace MLAgents.Shhhunt.Curriculum
             _recentObstacleCollision = false;
         }
 
+        private void LogStat(string metricName, float value = 1f)
+        {
+            _statsRecorder?.Add(metricName, value);
+        }
+
+        private void LogFailure(string reasonMetric)
+        {
+            LogStat(StatFailures);
+            if (!string.IsNullOrEmpty(reasonMetric))
+            {
+                LogStat(reasonMetric);
+            }
+        }
+
         private int ResolveCurriculumStage()
         {
             if (curriculum == null || curriculum.Count == 0)
@@ -573,6 +671,26 @@ namespace MLAgents.Shhhunt.Curriculum
 
             float stageValue = Academy.Instance.EnvironmentParameters.GetWithDefault(CurriculumStageParameter, 0f);
             return Mathf.Clamp(Mathf.RoundToInt(stageValue), 0, curriculum.Count - 1);
+        }
+
+        private void RecordSuccess()
+        {
+            _reachedTargetCount++;
+            if (_episodeTimer < _bestTimeToTarget)
+            {
+                _bestTimeToTarget = _episodeTimer;
+            }
+
+            LogStat(StatSuccesses);
+            LogStat(StatTimeToTarget, _episodeTimer);
+            if (_targetCurrentlyOnObstacle)
+            {
+                LogStat(StatObstacleTargets);
+            }
+            else
+            {
+                LogStat(StatGroundTargets);
+            }
         }
     }
 }
