@@ -42,6 +42,6 @@
   ],
   "benchmark_mean_reward": 4.5,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/PushBlock/Scenes/PushBlock.unity",
-  "agent_script_file": "PushBlockAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\PushBlock\\\\Scripts\\\\PushAgentBasic.cs",
   "trainer_config_file": "PushBlock.yaml"
 }

@@ -22,6 +22,6 @@
   "float_properties": [],
   "benchmark_mean_reward": 3000.0,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/Crawler/Scenes/Crawler.unity",
-  "agent_script_file": "CrawlerAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\Crawler\\\\Scripts\\\\CrawlerAgent.cs",
   "trainer_config_file": "Crawler.yaml"
 }

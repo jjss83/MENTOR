@@ -34,6 +34,6 @@
   ],
   "benchmark_mean_reward": null,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/StrikersVsGoalie/Scenes/StrikersVsGoalie.unity",
-  "agent_script_file": "StrikersVsGoalieAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\Soccer\\\\Scripts\\\\AgentSoccer.cs",
   "trainer_config_file": "StrikersVsGoalie.yaml"
 }

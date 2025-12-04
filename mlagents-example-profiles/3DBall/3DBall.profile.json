@@ -37,6 +37,6 @@
   ],
   "benchmark_mean_reward": 100.0,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/3DBall/Scenes/3DBall.unity",
-  "agent_script_file": "3DBallAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\3DBall\\\\Scripts\\\\Ball3DAgent.cs",
   "trainer_config_file": "3DBall.yaml"
 }

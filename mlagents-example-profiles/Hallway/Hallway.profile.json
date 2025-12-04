@@ -22,6 +22,6 @@
   "float_properties": [],
   "benchmark_mean_reward": 0.7,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/Hallway/Scenes/Hallway.unity",
-  "agent_script_file": "HallwayAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\Hallway\\\\Scripts\\\\HallwayAgent.cs",
   "trainer_config_file": "Hallway.yaml"
 }

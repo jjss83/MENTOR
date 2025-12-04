@@ -32,6 +32,6 @@
   ],
   "benchmark_mean_reward": 10.0,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/FoodCollector/Scenes/FoodCollector.unity",
-  "agent_script_file": "FoodCollectorAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\FoodCollector\\\\Scripts\\\\FoodCollectorAgent.cs",
   "trainer_config_file": "FoodCollector.yaml"
 }

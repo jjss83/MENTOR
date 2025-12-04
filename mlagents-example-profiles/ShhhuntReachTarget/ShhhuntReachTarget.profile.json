@@ -70,6 +70,6 @@
   ],
   "benchmark_mean_reward": null,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/ShhhuntReachTarget/ShhhuntReachTarget.unity",
-  "agent_script_file": "MLReachTargetAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\Shhhunt\\\\Assets\\\\ML-Agents\\\\MLReachTargetAgent\\\\Scripts\\\\MLReachTargetAgent.cs",
   "trainer_config_file": "ShhhuntReachTarget.yaml"
 }

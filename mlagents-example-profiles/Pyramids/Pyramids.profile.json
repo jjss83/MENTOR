@@ -20,6 +20,6 @@
   "float_properties": [],
   "benchmark_mean_reward": 1.75,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/Pyramids/Scenes/Pyramids.unity",
-  "agent_script_file": "PyramidsAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\Pyramids\\\\Scripts\\\\PyramidAgent.cs",
   "trainer_config_file": "Pyramids.yaml"
 }

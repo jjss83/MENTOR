@@ -43,6 +43,6 @@
   ],
   "benchmark_mean_reward": 2500.0,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/Walker/Scenes/Walker.unity",
-  "agent_script_file": "WalkerAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\Walker\\\\Scripts\\\\WalkerAgent.cs",
   "trainer_config_file": "Walker.yaml"
 }

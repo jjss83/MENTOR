@@ -3,6 +3,6 @@
   "name": "Basic",
   "description": "Auto-generated profile stub for the Basic ML-Agents example environment.",
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/Basic/Scenes/Basic.unity",
-  "agent_script_file": "BasicAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\Basic\\\\Scripts\\\\BasicController.cs",
   "trainer_config_file": "Basic.yaml"
 }

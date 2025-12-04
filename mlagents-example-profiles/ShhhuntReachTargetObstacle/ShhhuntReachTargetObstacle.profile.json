@@ -48,6 +48,6 @@
   ],
   "benchmark_mean_reward": null,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/ShhhuntReachTarget/ShhhuntReachTargetObstacles.unity",
-  "agent_script_file": "MLReachTargetObstacleAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\Shhhunt\\\\Assets\\\\ML-Agents\\\\MLReachTargetObstacleAgent\\\\Scripts\\\\MLReachTargetObstacleAgent.cs",
   "trainer_config_file": "ShhhuntReachTargetObstacle.yaml"
 }

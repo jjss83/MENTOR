@@ -33,6 +33,6 @@
   ],
   "benchmark_mean_reward": null,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/SoccerTwos/Scenes/SoccerTwos.unity",
-  "agent_script_file": "SoccerTwosAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\Soccer\\\\Scripts\\\\AgentSoccer.cs",
   "trainer_config_file": "SoccerTwos.yaml"
 }

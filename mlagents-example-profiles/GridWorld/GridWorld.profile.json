@@ -22,6 +22,6 @@
   "float_properties": [],
   "benchmark_mean_reward": 0.8,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/GridWorld/Scenes/GridWorld.unity",
-  "agent_script_file": "GridWorldAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\GridWorld\\\\Scripts\\\\GridAgent.cs",
   "trainer_config_file": "GridWorld.yaml"
 }

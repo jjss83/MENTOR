@@ -28,6 +28,6 @@
   ],
   "benchmark_mean_reward": null,
   "scene_path_hint": "Project/Assets/ML-Agents/Examples/Sorter/Scenes/Sorter.unity",
-  "agent_script_file": "SorterAgent.cs",
+  "agent_script_file": "X:\\\\workspace\\\\ml-agents\\\\Project\\\\Assets\\\\ML-Agents\\\\Examples\\\\Sorter\\\\Scripts\\\\SorterAgent.cs",
   "trainer_config_file": "Sorter.yaml"
 }
