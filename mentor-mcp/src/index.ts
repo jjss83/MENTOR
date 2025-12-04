@@ -13,7 +13,9 @@ const server = new McpServer({
 const trainingSchema = z.object({
   envPath: z.string().optional(),
   config: z.string().optional(),
-  runId: z.string().optional(),
+  runId: z
+    .string()
+    .describe("Leave empty to auto-name. Auto format: <behavior acronym>-YYMMDD-<sequence>."),
   resultsDir: z.string().optional(),
   condaEnv: z.string().optional(),
   basePort: z.number().int().optional(),
@@ -125,7 +127,8 @@ server.registerTool(
 server.registerTool(
   "train",
   {
-    description: "Start mentor-cli training via mentor-api and return run info",
+    description:
+      "Start mentor-cli training via mentor-api. Omit runId to auto-generate (<behavior acronym>-YYMMDD-<sequence>).",
     inputSchema: trainingSchema,
   },
   async (input) => {
