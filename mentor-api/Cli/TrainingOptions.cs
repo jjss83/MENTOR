@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Text;
 using YamlDotNet.RepresentationModel;
 
@@ -16,8 +17,24 @@ internal sealed record TrainingOptions(
     bool LaunchTensorBoard,
     bool Resume)
 {
-    internal const string DefaultResultsDirectory = @"X:\workspace\MENTOR\ml-agents-training-results";
+    internal static string DefaultResultsDirectory { get; private set; } = @"X:\workspace\MENTOR\ml-agents-training-results";
     private const string DefaultCondaEnvironmentName = "mlagents";
+    public static void SetDefaultResultsDirectory(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            DefaultResultsDirectory = Path.GetFullPath(path);
+        }
+        catch
+        {
+            DefaultResultsDirectory = path.Trim();
+        }
+    }
 
     public static bool TryParse(string[] args, out TrainingOptions? options, out string? error)
     {

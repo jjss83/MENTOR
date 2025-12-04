@@ -9,6 +9,10 @@ using YamlDotNet.RepresentationModel;
 using MentorTrainingRunner;
 using System.Diagnostics;
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration
+    .AddJsonFile("mentor-settings.json", optional: true, reloadOnChange: true)
+    .AddJsonFile("mentor-settings.local.json", optional: true, reloadOnChange: true);
+TrainingOptions.SetDefaultResultsDirectory(builder.Configuration["MentorApi:ResultsDirectory"]);
 builder.WebHost.ConfigureKestrel(o => o.AllowSynchronousIO = true);
 builder.WebHost.UseUrls("http://localhost:5113");
 builder.Services.AddEndpointsApiExplorer();

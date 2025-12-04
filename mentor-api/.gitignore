@@ -31,3 +31,4 @@ packages/
 
 # Local configuration overrides
 appsettings.*.local.json
+mentor-settings.local.json
