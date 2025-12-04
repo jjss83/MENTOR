@@ -1,6 +1,6 @@
 {
   "name": "ReportInterpreter",
-  "description": "Routes Mentor CLI run reports to the Report Interpreter agent with a prompt.",
-  "prompt": "Explain current results",
+  "description": "GitHub Copilot MCP endpoint that routes Mentor run reports to the Report Interpreter agent.",
+  "prompt": "Open the Mentor dashboard (file:///x:/workspace/MENTOR/mentor-webapp/index.html or http://localhost:4173), set the API to http://localhost:5113, pull mentor-mcp/report (or TrainingReport.json/log tails if needed), then summarize Health, Key Signals, Run Breakdown, and Recommendations. Call out missing or unreachable data explicitly.",
   "agent": "ReportInterpreter"
 }
