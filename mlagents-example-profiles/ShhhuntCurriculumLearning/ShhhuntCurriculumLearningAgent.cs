@@ -114,6 +114,14 @@ namespace MLAgents.Shhhunt.Curriculum
         [SerializeField] private float elevatedTargetProgressBonus = 0.02f;
         [SerializeField] private float elevatedTargetCompletionBonus = 0.25f;
 
+        [Header("Stuck Detection")]
+        [SerializeField] private bool enableStuckPenalty = true;
+        [SerializeField] private float stuckVelocityThreshold = 0.15f;
+        [SerializeField] private float stuckContactMemory = 0.4f;
+        [SerializeField] private float stuckTimeThreshold = 1.5f;
+        [SerializeField] private float stuckPenalty = -0.1f;
+        [SerializeField] private float stuckPenaltyCooldown = 1f;
+
 #if UNITY_EDITOR
         [Header("Sensor Checklist")]
         [TextArea(4, 8)]
@@ -132,6 +140,7 @@ namespace MLAgents.Shhhunt.Curriculum
         private const string StatTimeToTarget = "Shhhunt/TimeToTarget";
         private const string StatGroundTargets = "Shhhunt/GroundTargets";
         private const string StatObstacleTargets = "Shhhunt/ObstacleTargets";
+        private const string StatStuckPenalties = "Shhhunt/StuckPenalties";
 
         private readonly List<Collider> _cachedObstacleColliders = new List<Collider>();
         private float _lastDistanceToTarget;
@@ -143,6 +152,9 @@ namespace MLAgents.Shhhunt.Curriculum
         private float _episodeTimer;
         private int _currentPhaseIndex;
         private StatsRecorder _statsRecorder;
+        private float _stuckTimer;
+        private float _lastObstacleContactTime = float.NegativeInfinity;
+        private float _stuckPenaltyCooldownTimer;
 
         // Runtime stats (not serialized): shown read-only in a CustomEditor
         private int _reachedTargetCount;
@@ -183,6 +195,9 @@ namespace MLAgents.Shhhunt.Curriculum
             _lastDistanceToTarget = target != null ? Vector3.Distance(transform.position, target.position) : 0f;
             _episodeTimer = 0f;
             _jumpCooldownTimer = 0f;
+            _stuckTimer = 0f;
+            _stuckPenaltyCooldownTimer = 0f;
+            _lastObstacleContactTime = float.NegativeInfinity;
         }
 
         public override void CollectObservations(VectorSensor sensor)
@@ -246,6 +261,7 @@ namespace MLAgents.Shhhunt.Curriculum
             ApplyMovement(actions);
             HandleJumpAction(actions.ContinuousActions[4]);
 
+            Vector3 currentVelocity = movementController.GetVelocity();
             float distanceToTarget = Vector3.Distance(transform.position, target.position);
             if (CheckTerminalConditions(distanceToTarget))
             {
@@ -254,6 +270,7 @@ namespace MLAgents.Shhhunt.Curriculum
 
             ApplyShapingRewards(distanceToTarget);
             HandleObstaclePenalty();
+            HandleStuckPenalty(currentVelocity);
             AddReward(timePenalty);
         }
 
@@ -317,221 +334,13 @@ namespace MLAgents.Shhhunt.Curriculum
             }
         }
 
-        private void ApplyEnvironmentPhase(CurriculumPhase phase)
-        {
-            if (environmentManager == null)
-            {
-                return;
-            }
-
-            // Progressive reveal: always reset to a known baseline, then
-            // gradually enable geometry as the curriculum advances.
-            switch (phase.id)
-            {
-                case "GroundOnly":
-                    environmentManager.DisableAllObstacles();
-                    environmentManager.DisableAllStructure();
-                    break;
-                case "Obstacles":
-                    // Ground + some obstacles only. Keep structures off.
-                    environmentManager.DisableAllStructure();
-                    environmentManager.EnableNextObstacle();
-                    break;
-                case "Structures":
-                    // Obstacles fully available, progressively reveal structures.
-                    environmentManager.EnableAllObstacles();
-                    environmentManager.EnableNextStructure();
-                    break;
-                case "TargetOnObstacles":
-                    // Full environment: all obstacles/structures enabled.
-                    environmentManager.EnableAllObstacles();
-                    environmentManager.EnableAllStructure();
-                    break;
-                default:
-                    // Fallback: respect authored phase flags.
-                    if (phase.enableObstacles)
-                    {
-                        environmentManager.EnableAllObstacles();
-                    }
-                    else
-                    {
-                        environmentManager.DisableAllObstacles();
-                    }
-
-                    if (phase.enableStructures)
-                    {
-                        environmentManager.EnableAllStructure();
-                    }
-                    else
-                    {
-                        environmentManager.DisableAllStructure();
-                    }
-                    break;
-            }
-        }
-
-        private void ResetAgentTransform()
-        {
-            if (movementController != null)
-            {
-                movementController.ResetVelocity();
-                movementController.SetJumpInput(false);
-            }
-
-            Vector3 spawnPoint = randomizeStartPosition ? FindValidSpawnPoint() : transform.position;
-            transform.position = spawnPoint;
-            transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
-            _jumpRewardPending = false;
-            _recentObstacleCollision = false;
-            _isCurrentlySprinting = false;
-        }
-
-        private void PlaceTarget()
-        {
-            if (target == null)
-            {
-                return;
-            }
-
-            CurriculumPhase phase = CurrentPhase;
-            if (targetPositioner != null)
-            {
-                ConfigureTargetPositioner(phase);
-                // Placeholder: tie TargetPositioner.AllowOnObstacles to curriculum stage so
-                // EnvironmentManager + target placement stay in sync.
-                targetPositioner.PlaceTarget(phase.randomizeTarget);
-                _targetCurrentlyOnObstacle = targetPositioner.TargetCurrentlyOnObstacle;
-                return;
-            }
-
-            Vector3 obstaclePos = Vector3.zero;
-            bool placedOnObstacle = phase.allowTargetOnObstacles && TryGetRandomObstacleTop(out obstaclePos);
-            if (phase.requireTargetOnObstacles && !placedOnObstacle)
-            {
-                placedOnObstacle = TryGetRandomObstacleTop(out obstaclePos);
-            }
-
-            Vector3 groundPos = GetRandomGroundPosition(targetGroundYOffset);
-            target.position = placedOnObstacle ? obstaclePos : groundPos;
-            _targetCurrentlyOnObstacle = placedOnObstacle;
-        }
-
-        private void ConfigureTargetPositioner(CurriculumPhase phase)
-        {
-            BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-            FieldInfo allowField = typeof(TargetPositioner).GetField("allowTargetOnObstacles", flags);
-            FieldInfo mustField = typeof(TargetPositioner).GetField("targetMustSpawnOnObstacles", flags);
-            FieldInfo onField = typeof(TargetPositioner).GetField("targetOnObstacleYOffset", flags);
-            FieldInfo groundField = typeof(TargetPositioner).GetField("targetGroundYOffset", flags);
-            allowField?.SetValue(targetPositioner, phase.allowTargetOnObstacles);
-            mustField?.SetValue(targetPositioner, phase.requireTargetOnObstacles);
-            onField?.SetValue(targetPositioner, targetOnObstacleYOffset);
-            groundField?.SetValue(targetPositioner, targetGroundYOffset);
-        }
-
-        private Vector3 FindValidSpawnPoint()
-        {
-            for (int attempt = 0; attempt < Mathf.Max(spawnRetries, 1); attempt++)
-            {
-                Vector3 candidate = GetRandomGroundPosition(agentSpawnYOffset);
-                if (!Physics.CheckSphere(candidate, spawnClearanceRadius, obstacleMask, QueryTriggerInteraction.Ignore))
-                {
-                    return candidate;
-                }
-            }
-
-            return GetRandomGroundPosition(agentSpawnYOffset);
-        }
-
-        private Vector3 GetRandomGroundPosition(float heightOffset)
-        {
-            Vector3 center = GetAreaCenter();
-            float x = Random.Range(-spawnAreaSize.x * 0.5f, spawnAreaSize.x * 0.5f);
-            float z = Random.Range(-spawnAreaSize.z * 0.5f, spawnAreaSize.z * 0.5f);
-            Vector3 rayStart = center + new Vector3(x, 10f, z);
-            if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 30f, groundMask, QueryTriggerInteraction.Ignore))
-            {
-                return hit.point + Vector3.up * heightOffset;
-            }
-
-            return center + new Vector3(x, heightOffset, z);
-        }
-
-        private Vector3 GetAreaCenter()
-        {
-            if (areaCenter != null)
-            {
-                return areaCenter.position;
-            }
-
-            if (ground != null)
-            {
-                return ground.position;
-            }
-
-            return transform.parent != null ? transform.parent.position : Vector3.zero;
-        }
-
-        private bool TryGetRandomObstacleTop(out Vector3 position)
-        {
-            CleanCachedObstacleList();
-            if (_cachedObstacleColliders.Count == 0)
-            {
-                position = Vector3.zero;
-                return false;
-            }
-
-            Collider chosen = _cachedObstacleColliders[Random.Range(0, _cachedObstacleColliders.Count)];
-            Bounds bounds = chosen.bounds;
-            float x = Random.Range(bounds.min.x, bounds.max.x);
-            float z = Random.Range(bounds.min.z, bounds.max.z);
-            position = new Vector3(x, bounds.max.y + targetOnObstacleYOffset, z);
-            return true;
-        }
-
-        private void CacheObstacleColliders()
-        {
-            _cachedObstacleColliders.Clear();
-            foreach (Collider manual in manualObstacleColliders)
-            {
-                if (manual != null && !_cachedObstacleColliders.Contains(manual))
-                {
-                    _cachedObstacleColliders.Add(manual);
-                }
-            }
-
-            if (!autoCollectObstacles || string.IsNullOrEmpty(obstacleTag))
-            {
-                return;
-            }
-
-            GameObject[] taggedObstacles = GameObject.FindGameObjectsWithTag(obstacleTag);
-            foreach (GameObject obstacle in taggedObstacles)
-            {
-                if (obstacle.TryGetComponent(out Collider collider) && !_cachedObstacleColliders.Contains(collider))
-                {
-                    _cachedObstacleColliders.Add(collider);
-                }
-            }
-        }
-
-        private void CleanCachedObstacleList()
-        {
-            for (int i = _cachedObstacleColliders.Count - 1; i >= 0; i--)
-            {
-                Collider collider = _cachedObstacleColliders[i];
-                if (collider == null || !collider.gameObject.activeInHierarchy)
-                {
-                    _cachedObstacleColliders.RemoveAt(i);
-                }
-            }
-        }
 
         private void OnControllerColliderHit(ControllerColliderHit hit)
         {
             if (hit.collider != null && hit.collider.CompareTag("Obstacle"))
             {
                 _recentObstacleCollision = true;
+                _lastObstacleContactTime = Time.time;
             }
         }
 
@@ -646,6 +455,45 @@ namespace MLAgents.Shhhunt.Curriculum
 
             AddReward(obstacleCollisionPenalty);
             _recentObstacleCollision = false;
+        }
+
+        private void HandleStuckPenalty(Vector3 velocity)
+        {
+            if (!enableStuckPenalty)
+            {
+                return;
+            }
+
+            if (_stuckPenaltyCooldownTimer > 0f)
+            {
+                _stuckPenaltyCooldownTimer = Mathf.Max(0f, _stuckPenaltyCooldownTimer - Time.deltaTime);
+            }
+
+            bool phaseHasObstacles = CurrentPhase.enableObstacles;
+            if (!phaseHasObstacles)
+            {
+                _stuckTimer = 0f;
+                return;
+            }
+
+            bool lowVelocity = velocity.magnitude <= Mathf.Max(stuckVelocityThreshold, 0.0001f);
+            bool recentObstacleHit = Time.time - _lastObstacleContactTime <= stuckContactMemory;
+
+            if (lowVelocity && recentObstacleHit)
+            {
+                _stuckTimer += Time.deltaTime;
+                if (_stuckTimer >= stuckTimeThreshold && _stuckPenaltyCooldownTimer <= 0f)
+                {
+                    AddReward(stuckPenalty);
+                    LogStat(StatStuckPenalties);
+                    _stuckPenaltyCooldownTimer = Mathf.Max(stuckPenaltyCooldown, 0f);
+                    _stuckTimer = 0f;
+                }
+            }
+            else
+            {
+                _stuckTimer = Mathf.Max(_stuckTimer - Time.deltaTime, 0f);
+            }
         }
 
         private void LogStat(string metricName, float value = 1f)
