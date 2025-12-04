@@ -549,8 +549,8 @@ internal static class CurriculumConfigReader
 {
     public static IReadOnlyDictionary<string, CurriculumState> TryLoad(string runDirectory)
     {
-        var configPath = Path.Combine(runDirectory, "configuration.yaml");
-        if (!File.Exists(configPath))
+        var configPath = ResolveConfigPath(runDirectory);
+        if (configPath is null || !File.Exists(configPath))
         {
             return new Dictionary<string, CurriculumState>();
         }
@@ -630,6 +630,48 @@ internal static class CurriculumConfigReader
         catch
         {
             return new Dictionary<string, CurriculumState>();
+        }
+    }
+
+    private static string? ResolveConfigPath(string runDirectory)
+    {
+        var defaultConfigPath = Path.Combine(runDirectory, "configuration.yaml");
+        if (File.Exists(defaultConfigPath))
+        {
+            return defaultConfigPath;
+        }
+
+        try
+        {
+            var metadata = TrainingRunMetadata.TryLoad(runDirectory);
+            var configPath = metadata?.ConfigPath;
+            if (string.IsNullOrWhiteSpace(configPath))
+            {
+                return null;
+            }
+
+            var expanded = Environment.ExpandEnvironmentVariables(configPath);
+            if (string.IsNullOrWhiteSpace(expanded))
+            {
+                return null;
+            }
+
+            if (Path.IsPathRooted(expanded))
+            {
+                return File.Exists(expanded) ? expanded : null;
+            }
+
+            var relativeToRun = Path.Combine(runDirectory, expanded);
+            if (File.Exists(relativeToRun))
+            {
+                return relativeToRun;
+            }
+
+            return File.Exists(expanded) ? expanded : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 

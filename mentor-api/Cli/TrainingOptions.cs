@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using YamlDotNet.RepresentationModel;
 
 namespace MentorTrainingRunner;
 
@@ -267,34 +268,17 @@ internal sealed record TrainingOptions(
 
     private static string BuildConfigPrefix(string trainerConfigPath)
     {
-        var name = Path.GetFileNameWithoutExtension(trainerConfigPath)?.Trim();
+        var behaviorName = TryReadBehaviorName(trainerConfigPath);
+        var name = !string.IsNullOrWhiteSpace(behaviorName)
+            ? behaviorName
+            : Path.GetFileNameWithoutExtension(trainerConfigPath)?.Trim();
+
         if (string.IsNullOrWhiteSpace(name))
         {
             return "run";
         }
 
-        var acronym = new StringBuilder();
-        for (var i = 0; i < name.Length; i++)
-        {
-            var current = name[i];
-            var previous = i > 0 ? name[i - 1] : default;
-            var isBoundary = i == 0
-                || !char.IsLetterOrDigit(previous)
-                || (char.IsUpper(current) && (!char.IsUpper(previous) || (i + 1 < name.Length && char.IsLower(name[i + 1]))))
-                || (char.IsDigit(current) && !char.IsDigit(previous));
-
-            if (isBoundary && char.IsLetterOrDigit(current))
-            {
-                acronym.Append(char.ToLowerInvariant(current));
-            }
-        }
-
-        if (acronym.Length == 0)
-        {
-            acronym.Append(char.ToLowerInvariant(name[0]));
-        }
-
-        return acronym.ToString();
+        return BuildBehaviorAcronym(name);
     }
 
     private static int? TryParseSequence(string? name, string prefix)
@@ -318,6 +302,88 @@ internal sealed record TrainingOptions(
 
         var numberPart = suffix[..digitsLength];
         return int.TryParse(numberPart, NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : null;
+    }
+
+    private static string BuildBehaviorAcronym(string source)
+    {
+        var acronym = new StringBuilder();
+        char previous = default;
+        for (var i = 0; i < source.Length && acronym.Length < 3; i++)
+        {
+            var current = source[i];
+            if (!char.IsLetterOrDigit(current))
+            {
+                previous = current;
+                continue;
+            }
+
+            var isBoundary = i == 0
+                || !char.IsLetterOrDigit(previous)
+                || (char.IsUpper(current) && (char.IsLower(previous) || (!char.IsUpper(previous) && previous != default)))
+                || (char.IsDigit(current) && !char.IsDigit(previous));
+
+            if (isBoundary)
+            {
+                acronym.Append(char.ToLowerInvariant(current));
+            }
+
+            previous = current;
+        }
+
+        if (acronym.Length < 3)
+        {
+            foreach (var c in source.Where(char.IsLetterOrDigit))
+            {
+                if (acronym.Length >= 3)
+                {
+                    break;
+                }
+                acronym.Append(char.ToLowerInvariant(c));
+            }
+        }
+
+        if (acronym.Length == 0)
+        {
+            return "run";
+        }
+
+        if (acronym.Length < 3)
+        {
+            acronym.Append(new string('x', 3 - acronym.Length));
+        }
+
+        return acronym.ToString(0, 3);
+    }
+
+    private static string? TryReadBehaviorName(string trainerConfigPath)
+    {
+        try
+        {
+            using var reader = new StreamReader(trainerConfigPath);
+            var yaml = new YamlStream();
+            yaml.Load(reader);
+            if (yaml.Documents.Count == 0 || yaml.Documents[0].RootNode is not YamlMappingNode root)
+            {
+                return null;
+            }
+
+            if (!root.Children.TryGetValue(new YamlScalarNode("behaviors"), out var behaviorsNode))
+            {
+                return null;
+            }
+
+            if (behaviorsNode is not YamlMappingNode behaviors || behaviors.Children.Count == 0)
+            {
+                return null;
+            }
+
+            var firstKey = behaviors.Children.Keys.OfType<YamlScalarNode>().FirstOrDefault();
+            return firstKey?.Value;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private sealed class OptionsBuilder

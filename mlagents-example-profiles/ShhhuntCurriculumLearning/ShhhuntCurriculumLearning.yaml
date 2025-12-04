@@ -36,7 +36,7 @@ behaviors:
     behavioral_cloning: null
 
 env_settings:
-  num_envs: 32
+  num_envs: 21
 
 torch_settings:
   device: cuda
