@@ -27,6 +27,8 @@ The watcher restarts on saves; stop it with Ctrl+C.
 | Method | Route | Description |
 | --- | --- | --- |
 | `GET` | `/health` | Basic liveness probe; returns `{ "status": "ok" }` when the API is ready. |
+| `GET` | `/files` | Read a text file under `MentorApi:FileBridgeRoot` using `?path=relative\\to\\root`. |
+| `PUT` | `/files` | Overwrite/create a text file under `MentorApi:FileBridgeRoot` with the raw request body and `?path=relative\\to\\root`. |
 | `POST` | `/train` | Starts a new ML-Agents training job via the CLI runner. |
 | `POST` | `/train/stop` | Gracefully stops a running training session and marks it resumable. |
 | `POST` | `/train/resume` | Resumes a stopped or unfinished run using stored metadata (runs ML-Agents with `--resume`). |
@@ -36,6 +38,14 @@ The watcher restarts on saves; stop it with Ctrl+C.
 | `POST` | `/tensorboard/start` | Starts TensorBoard for the results directory if it is not already running. |
 
 Swagger exposes example payloads for each endpoint when you browse `http://localhost:5113/swagger`.
+
+## File bridge for Shhhunt (or other external projects)
+Configure `MentorApi:FileBridgeRoot` in `mentor-settings.local.json` to point at the root of the external repo you want to edit (e.g., `X:/workspace/Shhhunt`). The `/files` endpoints then let tools copy files into/out of that tree without opening the repo in this workspace:
+
+- Read: `GET http://localhost:5113/files?path=Assets/Scripts/MLReachTargetAgent.cs`
+- Write: `PUT http://localhost:5113/files?path=Assets/Scripts/MLReachTargetAgent.cs` with the raw text body
+
+The API normalizes paths and rejects requests that escape the configured root.
 
 ## Training Request Payload
 `/train` accepts the following JSON contract:

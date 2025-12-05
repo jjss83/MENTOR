@@ -35,6 +35,15 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 var runStore = new TrainingRunStore();
 var dashboardHost = new DashboardHost();
+var fileBridgeRoot = builder.Configuration["MentorApi:FileBridgeRoot"];
+if (string.IsNullOrWhiteSpace(fileBridgeRoot))
+{
+    Console.WriteLine("[FileBridge] MentorApi:FileBridgeRoot not configured; /files endpoints will reject requests until set.");
+}
+else
+{
+    Console.WriteLine($"[FileBridge] File bridge root set to '{fileBridgeRoot}'.");
+}
 Console.WriteLine("[Resume] Checking for runs marked to resume on start...");
 var resumeMessages = runStore.ResumeUnfinishedRuns(msg => Console.WriteLine($"[Resume] {msg}"));
 var resumedAny = resumeMessages.Any(msg => msg.Contains("Resumed", StringComparison.OrdinalIgnoreCase));
@@ -56,6 +65,41 @@ else
     Console.WriteLine($"[Dashboard] Failed to start web dashboard: {message}");
 }
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/files", async (string path) =>
+{
+    var resolved = FileBridge.Resolve(fileBridgeRoot, path);
+    if (!resolved.Success || string.IsNullOrWhiteSpace(resolved.FullPath))
+    {
+        return Results.BadRequest(new { error = resolved.Error ?? "Unable to resolve path.", configuredRoot = resolved.Root ?? fileBridgeRoot });
+    }
+
+    if (!File.Exists(resolved.FullPath))
+    {
+        return Results.NotFound(new { error = $"File '{path}' not found.", resolvedPath = resolved.FullPath });
+    }
+
+    var content = await File.ReadAllTextAsync(resolved.FullPath, Encoding.UTF8);
+    return Results.Text(content, "text/plain");
+});
+app.MapPut("/files", async (string path, HttpRequest request) =>
+{
+    var resolved = FileBridge.Resolve(fileBridgeRoot, path);
+    if (!resolved.Success || string.IsNullOrWhiteSpace(resolved.FullPath))
+    {
+        return Results.BadRequest(new { error = resolved.Error ?? "Unable to resolve path.", configuredRoot = resolved.Root ?? fileBridgeRoot });
+    }
+
+    string body;
+    using (var reader = new StreamReader(request.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: false))
+    {
+        body = await reader.ReadToEndAsync();
+    }
+
+    Directory.CreateDirectory(Path.GetDirectoryName(resolved.FullPath)!);
+    await File.WriteAllTextAsync(resolved.FullPath, body, Encoding.UTF8);
+
+    return Results.Ok(new { path = path.Trim(), resolvedPath = resolved.FullPath, bytesWritten = Encoding.UTF8.GetByteCount(body) });
+});
 app.MapPost("/train", (TrainingRequest request) =>
 {
     var resolvedEnvPath = string.IsNullOrWhiteSpace(request.EnvPath) ? null : request.EnvPath;
@@ -232,6 +276,52 @@ app.MapGet("/tensorboard/start", () =>
 
 app.Lifetime.ApplicationStopping.Register(() => dashboardHost.Stop());
 app.Run();
+internal static class FileBridge
+{
+    public static FilePathResolution Resolve(string? rootDirectory, string requestedPath)
+    {
+        if (string.IsNullOrWhiteSpace(rootDirectory))
+        {
+            return new FilePathResolution(false, "MentorApi:FileBridgeRoot is not configured.", null, null);
+        }
+
+        var normalizedRequest = requestedPath.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedRequest))
+        {
+            return new FilePathResolution(false, "path is required.", null, EnsureTrailingSeparator(Path.GetFullPath(rootDirectory)));
+        }
+
+        var root = EnsureTrailingSeparator(Path.GetFullPath(rootDirectory));
+        if (!Directory.Exists(root))
+        {
+            return new FilePathResolution(false, $"Configured file bridge root does not exist: '{root}'.", null, root);
+        }
+
+        var combined = Path.GetFullPath(Path.Combine(root, normalizedRequest));
+        if (!combined.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            return new FilePathResolution(false, "Requested path escapes the configured root directory.", combined, root);
+        }
+
+        return new FilePathResolution(true, null, combined, root);
+    }
+
+    private static string EnsureTrailingSeparator(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return path;
+        }
+
+        if (path.EndsWith(Path.DirectorySeparatorChar) || path.EndsWith(Path.AltDirectorySeparatorChar))
+        {
+            return path;
+        }
+
+        return path + Path.DirectorySeparatorChar;
+    }
+}
+internal sealed record FilePathResolution(bool Success, string? Error, string? FullPath, string? Root);
 internal static class CliArgs
 {
     public static List<string> FromTraining(TrainingRequest request, string? envPathOverride = null, string? configOverride = null, string? runIdOverride = null)

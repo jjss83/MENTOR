@@ -79,12 +79,47 @@ const tensorboardStatusSchema = z.object({
   resultsDir: z.string().optional(),
 });
 
+const fileReadSchema = z.object({
+  path: z.string().describe("Path relative to MentorApi:FileBridgeRoot (e.g., Assets/Scripts/MLReachTargetAgent.cs)"),
+});
+
+const fileWriteSchema = z.object({
+  path: z.string().describe("Path relative to MentorApi:FileBridgeRoot (e.g., Assets/Scripts/MLReachTargetAgent.cs)"),
+  content: z.string().describe("Full text content to write to the file."),
+});
+
 server.registerTool(
   "health",
   { description: "Check mentor-api health", inputSchema: z.object({}) },
   async () => {
     const response = await getJson<Record<string, unknown>>("/health");
     return asText(JSON.stringify(response, null, 2));
+  }
+);
+
+server.registerTool(
+  "file-read",
+  {
+    description: "Read a text file via mentor-api /files bridge (relative to MentorApi:FileBridgeRoot).",
+    inputSchema: fileReadSchema,
+  },
+  async (input) => {
+    const query = buildQuery({ path: input.path });
+    const content = await getText(`/files${query}`);
+    return asText(content);
+  }
+);
+
+server.registerTool(
+  "file-write",
+  {
+    description: "Write a text file via mentor-api /files bridge (relative to MentorApi:FileBridgeRoot).",
+    inputSchema: fileWriteSchema,
+  },
+  async (input) => {
+    const query = buildQuery({ path: input.path });
+    const json = await putText<unknown>(`/files${query}`, input.content);
+    return asText(JSON.stringify(json, null, 2));
   }
 );
 
@@ -340,6 +375,40 @@ async function getJson<TResponse>(path: string): Promise<TResponse> {
   }
 
   return JSON.parse(text) as TResponse;
+}
+
+async function getText(path: string): Promise<string> {
+  const response = await fetch(`${baseUrl}${path}`);
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(formatError(path, response.status, response.statusText, text));
+  }
+
+  return text;
+}
+
+async function putText<TResponse>(path: string, body: string): Promise<TResponse> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+    body,
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(formatError(path, response.status, response.statusText, text));
+  }
+
+  if (!text) {
+    return {} as TResponse;
+  }
+
+  try {
+    return JSON.parse(text) as TResponse;
+  } catch {
+    return { message: text } as TResponse;
+  }
 }
 
 function formatError(path: string, status: number, statusText: string, body: string) {

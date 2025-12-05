@@ -1,5 +1,6 @@
 {
   "MentorApi": {
-    "ResultsDirectory": "C:\\\\path\\\\to\\\\ml-agents-training-results"
+    "ResultsDirectory": "C:\\\\path\\\\to\\\\ml-agents-training-results",
+    "FileBridgeRoot": "C:\\\\path\\\\to\\\\Shhhunt"
   }
 }
