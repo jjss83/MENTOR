@@ -37,6 +37,10 @@ The watcher restarts on saves; stop it with Ctrl+C.
 
 Swagger exposes example payloads for each endpoint when you browse `http://localhost:5113/swagger`.
 
+## Testing
+- Automated testing strategy is documented in `TESTING.md`.
+- Unit and integration tests are planned to run via `dotnet test` once the `MentorApi.Tests` project is added.
+
 ## Training Request Payload
 `/train` accepts the following JSON contract:
 

@@ -27,6 +27,7 @@ builder.Services.AddCors(options =>
     });
 });
 var app = builder.Build();
+var isTesting = app.Environment.IsEnvironment("Testing");
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -35,25 +36,32 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 var runStore = new TrainingRunStore();
 var dashboardHost = new DashboardHost();
-Console.WriteLine("[Resume] Checking for runs marked to resume on start...");
-var resumeMessages = runStore.ResumeUnfinishedRuns(msg => Console.WriteLine($"[Resume] {msg}"));
-var resumedAny = resumeMessages.Any(msg => msg.Contains("Resumed", StringComparison.OrdinalIgnoreCase));
-if (!resumedAny)
+if (!isTesting)
 {
-    Console.WriteLine("[Resume] No runs were resumed. Use the web app to mark runs for resume.");
-}
-var dashboardStartup = dashboardHost.Start();
-if (dashboardStartup.Started || dashboardStartup.AlreadyRunning)
-{
-    var statusText = dashboardStartup.Started ? "started" : "already running";
-    var url = dashboardStartup.Url ?? dashboardHost.Url;
-    var message = string.IsNullOrWhiteSpace(dashboardStartup.Message) ? string.Empty : $" {dashboardStartup.Message}";
-    Console.WriteLine($"[Dashboard] Web dashboard {statusText} at {url}.{message}");
+    Console.WriteLine("[Resume] Checking for runs marked to resume on start...");
+    var resumeMessages = runStore.ResumeUnfinishedRuns(msg => Console.WriteLine($"[Resume] {msg}"));
+    var resumedAny = resumeMessages.Any(msg => msg.Contains("Resumed", StringComparison.OrdinalIgnoreCase));
+    if (!resumedAny)
+    {
+        Console.WriteLine("[Resume] No runs were resumed. Use the web app to mark runs for resume.");
+    }
+    var dashboardStartup = dashboardHost.Start();
+    if (dashboardStartup.Started || dashboardStartup.AlreadyRunning)
+    {
+        var statusText = dashboardStartup.Started ? "started" : "already running";
+        var url = dashboardStartup.Url ?? dashboardHost.Url;
+        var message = string.IsNullOrWhiteSpace(dashboardStartup.Message) ? string.Empty : $" {dashboardStartup.Message}";
+        Console.WriteLine($"[Dashboard] Web dashboard {statusText} at {url}.{message}");
+    }
+    else
+    {
+        var message = string.IsNullOrWhiteSpace(dashboardStartup.Message) ? "Unknown error." : dashboardStartup.Message;
+        Console.WriteLine($"[Dashboard] Failed to start web dashboard: {message}");
+    }
 }
 else
 {
-    var message = string.IsNullOrWhiteSpace(dashboardStartup.Message) ? "Unknown error." : dashboardStartup.Message;
-    Console.WriteLine($"[Dashboard] Failed to start web dashboard: {message}");
+    Console.WriteLine("[Startup] Testing environment detected; skipping resume and dashboard startup.");
 }
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapPost("/train", (TrainingRequest request) =>
@@ -232,6 +240,7 @@ app.MapGet("/tensorboard/start", () =>
 
 app.Lifetime.ApplicationStopping.Register(() => dashboardHost.Stop());
 app.Run();
+public partial class Program { }
 internal static class CliArgs
 {
     public static List<string> FromTraining(TrainingRequest request, string? envPathOverride = null, string? configOverride = null, string? runIdOverride = null)
