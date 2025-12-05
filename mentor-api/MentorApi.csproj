@@ -11,4 +11,10 @@
     <PackageReference Include="YamlDotNet" Version="15.3.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="MentorApi.Tests\**\*.cs" />
+    <EmbeddedResource Remove="MentorApi.Tests\**\*" />
+    <None Remove="MentorApi.Tests\**\*" />
+  </ItemGroup>
+
 </Project>
